@@ -1,0 +1,1598 @@
+<!doctype html>
+<html>
+ <head>
+  <meta charset="utf8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+ </head>
+ <body>
+  <title>Routine-Fit Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&amp;family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+  <style>
+/* Layout: sticky progress header, tab strip, month calendar that collapses to an agenda list on phones, detail drawer under the grid */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --fg:#17202b; --muted:#5b6877; --line:#d9e0e7;
+  --pharma:#2f62c9; --patho:#b83a63; --micro:#23805c; --biz:#a86b00;
+  --pharma-t:#e3ebfa; --patho-t:#f8e3ea; --micro-t:#dff1e9; --biz-t:#faefd6;
+  --accent:#17202b; --accent-fg:#ffffff; --today:#17202b;
+  --display:'Archivo',system-ui,sans-serif; --body:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10161d; --surface:#18202a; --fg:#e8edf2; --muted:#9aa7b5; --line:#2a3541;
+  --pharma:#7ea6f5; --patho:#f08aa9; --micro:#6cd1a4; --biz:#f0b74a;
+  --pharma-t:#1d2a44; --patho-t:#41202c; --micro-t:#17352a; --biz-t:#3b2d10;
+  --accent:#e8edf2; --accent-fg:#10161d; --today:#e8edf2; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161d; --surface:#18202a; --fg:#e8edf2; --muted:#9aa7b5; --line:#2a3541;
+  --pharma:#7ea6f5; --patho:#f08aa9; --micro:#6cd1a4; --biz:#f0b74a;
+  --pharma-t:#1d2a44; --patho-t:#41202c; --micro-t:#17352a; --biz-t:#3b2d10;
+  --accent:#e8edf2; --accent-fg:#10161d; --today:#e8edf2; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:clamp(26px,5vw,38px);font-weight:800;line-height:1.1}
+h2{font-size:20px;font-weight:700} h3{font-size:16px;font-weight:700}
+.sub{color:var(--muted);margin:6px 0 0;max-width:62ch}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.top{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:end}
+@media(max-width:720px){.top{grid-template-columns:1fr}}
+.prog{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:baseline}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{font:600 14px var(--body);background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:10px 14px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--fg)}
+button:focus-visible,.cell:focus-visible,input:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.panel[hidden]{display:none}
+.month{display:flex;flex-direction:column;gap:10px;margin-bottom:26px}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.dowh{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0 4px}
+.cell{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 7px 8px;display:flex;flex-direction:column;gap:5px;min-height:112px;min-width:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.cell:hover{border-color:var(--muted)}
+.cell.sel{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
+.cell.today .dn{background:var(--today);color:var(--bg);border-radius:4px;padding:0 5px}
+.cell.pad{background:transparent;border:0;cursor:default;min-height:0}
+.cell.past:not(.today){opacity:.82}
+.dn{font:600 12px var(--mono);align-self:flex-start}
+.dl{display:none;font-size:12px;color:var(--muted)}
+.chip{font-size:11.5px;line-height:1.25;padding:2px 5px;border-radius:4px;font-weight:600;overflow-wrap:anywhere}
+.chip.P{background:var(--pharma-t);color:var(--pharma)} .chip.H{background:var(--patho-t);color:var(--patho)} .chip.M{background:var(--micro-t);color:var(--micro)}
+.chip.B{background:var(--biz-t);color:var(--biz)} .chip.R{background:var(--line);color:var(--muted)}
+.chip small{font-weight:400;opacity:.9}
+.ck{margin-top:auto;display:flex;gap:4px}
+.ck span{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--muted)}
+.ck span.on{background:var(--micro);border-color:var(--micro)}
+.ck span.on.b{background:var(--biz);border-color:var(--biz)}
+@media(max-width:700px){
+  .grid{grid-template-columns:1fr} .dowh,.cell.pad{display:none}
+  .cell{min-height:0;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:9px 10px}
+  .dl{display:inline}
+  .ck{margin:0 0 0 auto}
+}
+.drawer{background:var(--surface);border:1px solid var(--fg);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;scroll-margin-top:12px}
+.drawer .row{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:8px;flex:1 1 260px;min-width:0;cursor:pointer}
+.chk input{width:20px;height:20px;margin-top:2px;flex:none;accent-color:var(--fg)}
+.chk b{display:block;font-size:14px} .chk span{font-size:13.5px;color:var(--muted)}
+.tt{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:820px){.tt{grid-template-columns:1fr}}
+.sched{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.sched h3{padding:12px 14px;border-bottom:1px solid var(--line)}
+.sched h3 span{font:400 12px var(--mono);color:var(--muted);margin-left:8px}
+.slot{display:grid;grid-template-columns:104px 1fr;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line);align-items:start}
+.slot:last-child{border-bottom:0}
+.slot time{font:500 12.5px var(--mono);color:var(--muted);padding-top:2px}
+.slot p{margin:0;font-size:14px}.slot p em{display:block;font-style:normal;color:var(--muted);font-size:13px}
+.slot.study{background:linear-gradient(90deg,var(--pharma-t),transparent 70%)}
+.slot.bz{background:linear-gradient(90deg,var(--biz-t),transparent 70%)}
+.slot.off{opacity:.78}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.n{white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px}
+.note{background:var(--biz-t);color:var(--fg);border-radius:10px;padding:14px 16px;font-size:14px}
+.note b{color:var(--biz)}
+ul.plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;max-width:72ch}
+.stack{display:flex;flex-direction:column;gap:16px}
+.theme{align-self:flex-start;font:500 12px var(--mono);background:none;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:5px 9px;cursor:pointer}
+
+.chip.fin{opacity:.55}
+.chip.fin::before{content:"✓ "}
+.chip.W{background:var(--biz-t);color:var(--biz)}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted)}
+.stats b{color:var(--fg);font-weight:600}
+.ahead{color:var(--micro)!important}.behind{color:var(--patho)!important}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:500 13px var(--body);background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 11px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.warn{border-color:var(--patho);color:var(--patho)}
+.lrow{display:grid;grid-template-columns:auto 1fr 84px 128px;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:14px}
+.lrow:last-child{border-bottom:0}
+.lrow input[type=checkbox]{width:18px;height:18px;accent-color:var(--fg)}
+.lrow input[type=number]{width:72px;font:400 13px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:3px 6px}
+.lrow .pd{font:400 12px var(--mono);color:var(--muted);text-align:right}
+.lrow.dn .nm{text-decoration:line-through;color:var(--muted)}
+@media(max-width:560px){.lrow{grid-template-columns:auto 1fr 72px}.lrow .pd{grid-column:2/4;text-align:left}}
+.lsub{display:flex;gap:6px;flex-wrap:wrap}
+.lsub .btn[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.lbox{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.gantt{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.gr{display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:center}
+.gr .lb{font:500 12px var(--mono);color:var(--muted)}
+.tk{position:relative;height:20px;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat}
+.tk i{position:absolute;top:2px;height:16px;border-radius:4px;background:var(--biz-t);border:1px solid var(--biz)}
+.tk i.dn{background:var(--biz)}
+.tk i.cur{background:linear-gradient(90deg,var(--biz) var(--p,0%),var(--biz-t) var(--p,0%))}
+.tk u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--fg);text-decoration:none}
+.axis{position:relative;height:16px;margin-left:42px;font:400 11px var(--mono);color:var(--muted)}
+.axis span{position:absolute;top:0;transform:translateX(0)}
+.wk{display:grid;grid-template-columns:70px 1fr;gap:6px 14px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.wk:last-child{border-bottom:0}
+.wk .tag{font:600 12px var(--mono)}
+.wk h4{margin:0;font:600 14px var(--body)}
+.wk p{margin:2px 0 0;font-size:13.5px;color:var(--muted)}
+.wk .mt{font:400 12px var(--mono);color:var(--muted);margin-top:4px}
+.wk.cur{background:var(--biz-t)}
+@media(max-width:560px){.wk{grid-template-columns:1fr}}
+.pill{font:500 11px var(--mono);padding:1px 6px;border-radius:4px;background:var(--line);color:var(--muted);margin-left:6px}
+.pill.g{background:var(--micro-t);color:var(--micro)}.pill.a{background:var(--biz-t);color:var(--biz)}
+
+.trow{display:grid;grid-template-columns:96px 1fr 84px;gap:10px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:0}
+.trow label{font-size:14px}
+.trow input{font:400 14px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:6px 8px;min-width:0;width:100%}
+.trow input.bad{border-color:var(--patho);background:var(--patho-t)}
+.trow .st{font:400 11.5px var(--mono);color:var(--muted);text-align:right}
+.trow .st.ok{color:var(--micro)}
+.bulk{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.bulk summary{padding:11px 14px;cursor:pointer;font-weight:600;font-size:14px}
+.bulkbody{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
+.bulkbody textarea{width:100%;font:400 13.5px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px}
+@media(max-width:480px){.trow{grid-template-columns:78px 1fr}.trow .st{display:none}}
+
+.dayhead{display:flex;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;align-items:flex-end}
+.datein{font:400 13px var(--mono);background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.blk{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column}
+.blk .bh{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.blk .bh .mono{font-size:12.5px;color:var(--muted)}
+.blk .bh b{font:700 15px var(--display)}
+.blk.info{opacity:.85}.blk.info .bh{margin-bottom:4px}
+.blk .row{display:flex;flex-direction:column;gap:8px}
+.chk.dis{opacity:.6;cursor:default}
+.chk:has(input:checked) b{color:var(--muted);text-decoration:line-through}
+
+.bsum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.bsum div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.bsum span{font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.bsum b{font:700 17px var(--display)}
+details.ph{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+details.ph>summary{display:flex;flex-direction:column;gap:2px;padding:12px 14px;cursor:pointer;list-style:none}
+details.ph>summary::-webkit-details-marker{display:none}
+details.ph>summary b{font:700 15px var(--display)}
+details.ph>summary .mono{font-size:12px;color:var(--muted)}
+details.ph[open]>summary{border-bottom:1px solid var(--line)}
+.cp{padding:10px 14px;font-size:13.5px;background:var(--biz-t);color:var(--fg)}
+.cp b{color:var(--biz)}
+.chip.T{background:var(--fg);color:var(--bg)}.chip.V{background:var(--line);color:var(--fg)}
+details.res{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+details.res>summary{cursor:pointer;font:600 13px var(--body)}
+details.res[open]{display:flex;flex-direction:column;gap:6px}
+details.res>b{font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:4px}
+details.res a{color:var(--fg);font-size:13.5px;text-underline-offset:2px}
+details.res div{font-size:13.5px}
+.tform{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;align-items:end}
+.tform label{display:flex;flex-direction:column;gap:3px;font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.tform input,.tform select{font:400 14px var(--body);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 8px;min-width:0;width:100%}
+.titem{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.titem .ok{color:var(--micro)}.titem .bad{color:var(--patho)}
+
+/* ===== Visual polish layer (design only, no logic changes) ===== */
+:root{
+  --bg:#eef7f6; --surface:#ffffff; --fg:#10292d; --muted:#5a7a7e; --line:#d3e6e4;
+  --pharma:#6552e0; --patho:#d0386f; --micro:#2f9e44; --biz:#c17a00;
+  --pharma-t:#ebe8ff; --patho-t:#ffe6ef; --micro-t:#e0f6d9; --biz-t:#fff1d3;
+  --brand:#0d9488; --brand2:#0891b2; --brand3:#f59e0b;
+  --grad:linear-gradient(135deg,#0f766e 0%,#0e9aa7 52%,#2563eb 100%);
+  --today:#0d9488;
+  --r:16px; --shadow:0 1px 2px rgba(10,50,55,.06),0 8px 24px -10px rgba(10,90,100,.18);
+  --shadow-lg:0 2px 4px rgba(10,50,55,.08),0 18px 40px -14px rgba(10,90,100,.3);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#071417; --surface:#0f2328; --fg:#e4f4f2; --muted:#86adb0; --line:#1c3b41;
+  --pharma:#a99bff; --patho:#ff8fb5; --micro:#7ddc6e; --biz:#ffc45c;
+  --pharma-t:#251f55; --patho-t:#47203a; --micro-t:#1b3a1c; --biz-t:#43310f;
+  --brand:#2dd4bf; --today:#2dd4bf;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -12px rgba(0,0,0,.6);
+  --shadow-lg:0 2px 4px rgba(0,0,0,.5),0 20px 44px -14px rgba(0,0,0,.7)}}
+:root[data-theme="dark"]{
+  --bg:#071417; --surface:#0f2328; --fg:#e4f4f2; --muted:#86adb0; --line:#1c3b41;
+  --pharma:#a99bff; --patho:#ff8fb5; --micro:#7ddc6e; --biz:#ffc45c;
+  --pharma-t:#251f55; --patho-t:#47203a; --micro-t:#1b3a1c; --biz-t:#43310f;
+  --brand:#2dd4bf; --today:#2dd4bf;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -12px rgba(0,0,0,.6);
+  --shadow-lg:0 2px 4px rgba(0,0,0,.5),0 20px 44px -14px rgba(0,0,0,.7)}
+:root[data-theme="light"]{color-scheme:light}
+
+html{scroll-behavior:smooth}
+body{
+  background:
+    radial-gradient(900px 420px at 8% -6%,rgba(13,148,136,.18),transparent 60%),
+    radial-gradient(800px 380px at 100% 0%,rgba(245,158,11,.14),transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+  font-size:15px;-webkit-font-smoothing:antialiased;
+}
+.wrap{gap:22px}
+::selection{background:var(--brand);color:#fff}
+
+/* Hero header */
+.top{
+  background:var(--grad);color:#fff;border-radius:24px;padding:28px;gap:22px;align-items:stretch;
+  position:relative;overflow:hidden;box-shadow:var(--shadow-lg);
+}
+.top::before,.top::after{content:"";position:absolute;border-radius:50%;pointer-events:none;filter:blur(2px)}
+.top::before{width:320px;height:320px;right:-90px;top:-140px;background:radial-gradient(circle,rgba(255,255,255,.28),transparent 68%)}
+.top::after{width:260px;height:260px;left:-80px;bottom:-150px;background:radial-gradient(circle,rgba(255,255,255,.16),transparent 70%)}
+.top>*{position:relative;z-index:1}
+.top h1{color:#fff;font-size:clamp(28px,5.4vw,44px);letter-spacing:-.025em;text-shadow:0 2px 18px rgba(0,40,50,.3)}
+.top h1::before{content:"";display:inline-block;width:.5em;height:.5em;margin-right:.35em;border-radius:30%;background:#fff;opacity:.95;transform:rotate(45deg) translateY(-.05em);box-shadow:.18em .18em 0 rgba(255,255,255,.4)}
+.top .sub{color:rgba(255,255,255,.88);font-size:14.5px;line-height:1.6;max-width:56ch}
+.prog{
+  color:var(--fg);background:color-mix(in srgb,var(--surface) 92%,transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.35);border-radius:var(--r);padding:16px;box-shadow:0 10px 30px -12px rgba(0,40,60,.45);
+}
+.top .prog b{font-family:var(--display);font-size:16px}
+.bar{height:12px;border-radius:99px;background:var(--line);box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
+.bar i{transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.bar i:first-child{border-radius:99px 0 0 99px}
+.legend{font-size:12.5px;gap:8px 16px}
+.dot{border-radius:50%;width:10px;height:10px}
+.stats{font-size:12.5px;gap:6px 16px}
+.stats>span{background:var(--bg);border:1px solid var(--line);padding:3px 9px;border-radius:99px}
+
+/* Tabs as a segmented pill control */
+.tabs{
+  border:1px solid var(--line);background:var(--surface);padding:5px;border-radius:99px;gap:4px;
+  box-shadow:var(--shadow);align-self:flex-start;max-width:100%;
+}
+.tabs button{
+  border:0;border-radius:99px;padding:9px 20px;color:var(--muted);font-weight:600;transition:all .2s ease;
+}
+.tabs button:hover{color:var(--fg);background:color-mix(in srgb,var(--brand) 9%,transparent)}
+.tabs button[aria-selected="true"]{background:var(--grad);color:#fff;box-shadow:0 6px 16px -6px rgba(13,148,136,.7)}
+
+/* Buttons and inputs */
+.btn{
+  border-radius:99px;padding:8px 15px;font-weight:600;background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;box-shadow:0 1px 2px rgba(10,50,55,.05);
+}
+.btn:hover{border-color:var(--brand);color:var(--brand);transform:translateY(-1px);box-shadow:0 6px 14px -8px rgba(13,148,136,.5)}
+.btn:active{transform:translateY(0)}
+#toToday,#dToday,.tform .btn,#cForm .btn{background:var(--grad);color:#fff;border-color:transparent}
+#toToday:hover,#dToday:hover,.tform .btn:hover,#cForm .btn:hover{color:#fff;border-color:transparent;filter:brightness(1.07)}
+.datein,.tform input,.tform select,.trow input,#cNew,.lrow input[type=number]{
+  border-radius:10px;border:1px solid var(--line);background:var(--surface);transition:border-color .15s,box-shadow .15s;
+}
+.datein:focus,.tform input:focus,.tform select:focus,#cNew:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 22%,transparent)}
+button:focus-visible,.cell:focus-visible,input:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.theme{border-radius:99px;padding:7px 14px;background:var(--surface);align-self:center;box-shadow:var(--shadow);transition:all .15s}
+.theme:hover{color:var(--brand);border-color:var(--brand)}
+
+/* Panels / cards */
+.bulk,.sched,.tbl,.lbox,.gantt,.blk,details.ph,.bsum div,.titem,.drawer{
+  border-radius:var(--r);box-shadow:var(--shadow);border-color:var(--line);
+}
+.bulk summary{padding:14px 18px;font-family:var(--display);font-weight:700;font-size:15px}
+.bulk summary::marker{color:var(--brand)}
+.note{
+  border-radius:var(--r);padding:16px 18px;border:1px solid color-mix(in srgb,var(--biz) 28%,transparent);
+  border-left:5px solid var(--biz);box-shadow:var(--shadow);
+}
+
+/* Calendar */
+.month{gap:12px;margin-bottom:32px}
+.month h2{font-size:24px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.month h2::before{content:"";width:6px;height:24px;border-radius:4px;background:var(--grad)}
+.grid{gap:8px}
+.dowh{padding:0 6px 2px;font-size:11px;font-weight:600}
+.cell{
+  border-radius:14px;padding:9px 8px 10px;box-shadow:0 1px 2px rgba(10,50,55,.04);
+  transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;
+}
+.cell:hover{transform:translateY(-2px);border-color:var(--brand);box-shadow:var(--shadow)}
+.cell.pad:hover{transform:none;box-shadow:none}
+.cell.sel{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand),var(--shadow)}
+.cell.today{background:linear-gradient(180deg,color-mix(in srgb,var(--brand) 10%,var(--surface)),var(--surface));border-color:color-mix(in srgb,var(--brand) 45%,var(--line))}
+.cell.today .dn{background:var(--grad);color:#fff;border-radius:99px;padding:1px 8px;box-shadow:0 4px 10px -3px rgba(13,148,136,.7)}
+.dn{font-size:12.5px}
+.chip{border-radius:99px;padding:3px 8px;font-size:11.5px;font-weight:600;border:1px solid transparent}
+.chip.P{border-color:color-mix(in srgb,var(--pharma) 22%,transparent)}
+.chip.H{border-color:color-mix(in srgb,var(--patho) 22%,transparent)}
+.chip.M{border-color:color-mix(in srgb,var(--micro) 22%,transparent)}
+.chip.W{border-color:color-mix(in srgb,var(--biz) 25%,transparent)}
+.chip.T{background:var(--grad);color:#fff}
+.chip.V{background:var(--line);color:var(--fg)}
+.ck span{width:10px;height:10px}
+@media(max-width:700px){.cell{border-radius:14px;padding:11px 12px}}
+
+/* Drawer */
+.drawer{border:1px solid color-mix(in srgb,var(--brand) 50%,var(--line));padding:20px;gap:14px;background:linear-gradient(180deg,color-mix(in srgb,var(--brand) 5%,var(--surface)),var(--surface) 140px)}
+.drawer h3{font-size:20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pill{border-radius:99px;padding:2px 9px;font-weight:600}
+.pill.a{background:var(--grad);color:#fff}
+
+/* Checklist rows */
+.chk{
+  border-radius:14px;padding:12px 14px;background:var(--surface);transition:border-color .15s,background .15s,transform .15s;
+}
+.chk:hover{border-color:color-mix(in srgb,var(--brand) 55%,var(--line))}
+.chk:has(input:checked){background:color-mix(in srgb,var(--micro) 9%,var(--surface));border-color:color-mix(in srgb,var(--micro) 40%,var(--line))}
+.chk input[type=checkbox],.lrow input[type=checkbox]{
+  appearance:none;-webkit-appearance:none;width:22px;height:22px;border-radius:7px;border:2px solid var(--muted);
+  background:var(--surface);display:grid;place-content:center;cursor:pointer;transition:all .15s;flex:none;margin-top:1px;
+}
+.chk input[type=checkbox]:hover{border-color:var(--brand)}
+.chk input[type=checkbox]::after{
+  content:"";width:10px;height:6px;border-left:2.5px solid #fff;border-bottom:2.5px solid #fff;
+  transform:rotate(-45deg) scale(0);margin-top:-2px;transition:transform .15s cubic-bezier(.3,1.6,.5,1);
+}
+.chk input[type=checkbox]:checked,.lrow input[type=checkbox]:checked{background:var(--micro);border-color:var(--micro)}
+.chk input[type=checkbox]:checked::after{transform:rotate(-45deg) scale(1)}
+.chk input:disabled{cursor:default}
+.chk b{font-weight:600}
+
+/* Daily view */
+.dayhead h2{font-size:clamp(24px,4.6vw,34px);font-weight:800;letter-spacing:-.025em}
+#dkick{color:var(--brand)!important;font-weight:600}
+.blk{padding:16px 18px;position:relative;overflow:hidden}
+.blk::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--grad);opacity:.85}
+.blk.info::before{background:var(--line)}
+.blk .bh .mono{background:var(--bg);border:1px solid var(--line);padding:2px 9px;border-radius:99px;font-size:12px}
+.blk .bh b{font-size:16px}
+
+/* Business tab */
+.bsum{gap:12px}
+.bsum div{padding:14px 16px;background:linear-gradient(160deg,var(--surface),color-mix(in srgb,var(--brand) 6%,var(--surface)))}
+.bsum b{font-size:20px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.gantt{padding:16px 18px;gap:8px}
+.tk{height:24px}
+.tk i{border-radius:8px;border:0;background:color-mix(in srgb,var(--biz) 22%,var(--surface))}
+.tk i.dn{background:linear-gradient(90deg,#f59e0b,#f97316)}
+.tk i.cur{background:linear-gradient(90deg,#f59e0b var(--p,0%),color-mix(in srgb,var(--biz) 22%,var(--surface)) var(--p,0%))}
+.tk u{background:var(--brand);width:3px;border-radius:2px}
+details.ph{overflow:hidden}
+details.ph>summary{padding:16px 18px;transition:background .15s}
+details.ph>summary:hover{background:color-mix(in srgb,var(--brand) 6%,transparent)}
+details.ph>summary b{font-size:17px}
+.cp{background:linear-gradient(90deg,var(--biz-t),transparent);border-bottom:1px solid var(--line);padding:12px 18px}
+.wk{padding:16px 18px;transition:background .15s}
+.wk .tag{display:inline-block;background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-weight:600}
+.wk.cur{background:linear-gradient(90deg,color-mix(in srgb,var(--biz) 14%,var(--surface)),transparent 80%);box-shadow:inset 4px 0 0 var(--biz)}
+details.res{border-top:1px dashed var(--line)}
+details.res summary{color:var(--brand)}
+details.res a{color:var(--brand);text-decoration-thickness:1px}
+details.res a:hover{text-decoration-thickness:2px}
+
+/* Tests */
+.titem{padding:12px 14px}
+.tform label{font-weight:600}
+
+/* Motion & polish */
+.panel:not([hidden]){animation:rise .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media(max-width:720px){.top{padding:20px;border-radius:20px}.tabs button{padding:8px 14px}}
+::-webkit-scrollbar{height:8px;width:8px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+
+/* ===== Alarms ===== */
+.alarm-top{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow)}
+.alarm-top .big{font:800 20px var(--display)}
+.sw{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-weight:600}
+.sw input{appearance:none;-webkit-appearance:none;width:48px;height:28px;border-radius:99px;background:var(--line);position:relative;cursor:pointer;transition:background .2s;margin:0}
+.sw input::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.sw input:checked{background:var(--grad)}
+.sw input:checked::after{transform:translateX(20px)}
+.arow{display:grid;grid-template-columns:auto 76px 1fr auto;gap:12px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line)}
+.arow:last-child{border-bottom:0}
+.arow .tm{font:600 14px var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:3px 10px;text-align:center}
+.arow .ds{font-size:12.5px;color:var(--muted)}
+.arow b{font-size:14.5px}
+.arow.nx{background:linear-gradient(90deg,color-mix(in srgb,var(--brand) 12%,transparent),transparent 80%);box-shadow:inset 4px 0 0 var(--brand)}
+.arow input[type=checkbox]{appearance:none;-webkit-appearance:none;width:22px;height:22px;border-radius:7px;border:2px solid var(--muted);display:grid;place-content:center;cursor:pointer;background:var(--surface);margin:0}
+.arow input[type=checkbox]::after{content:"";width:10px;height:6px;border-left:2.5px solid #fff;border-bottom:2.5px solid #fff;transform:rotate(-45deg) scale(0);margin-top:-2px;transition:transform .15s}
+.arow input[type=checkbox]:checked{background:var(--brand);border-color:var(--brand)}
+.arow input[type=checkbox]:checked::after{transform:rotate(-45deg) scale(1)}
+@media(max-width:560px){.arow{grid-template-columns:auto 1fr auto}.arow .ds{display:none}}
+#alarmBanner{position:fixed;left:50%;top:14px;transform:translate(-50%,-140%);z-index:99;width:min(520px,calc(100vw - 24px));background:var(--grad);color:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 20px 50px -10px rgba(0,30,50,.6);display:flex;gap:14px;align-items:center;transition:transform .4s cubic-bezier(.2,1.2,.3,1)}
+#alarmBanner.show{transform:translate(-50%,0);animation:ring 1s ease-in-out 3}
+@keyframes ring{0%,100%{rotate:0deg}15%{rotate:-2deg}30%{rotate:2deg}45%{rotate:-1.5deg}60%{rotate:1.5deg}}
+#alarmBanner b{font:800 17px var(--display);display:block}
+#alarmBanner span.s{font-size:13.5px;opacity:.92}
+#alarmBanner .ic{font-size:28px}
+#alarmBanner button{margin-left:auto;background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:99px;padding:7px 14px;font:600 13px var(--body);cursor:pointer}
+#alarmBanner button:hover{background:rgba(255,255,255,.32)}
+
+#alarmBanner:not(.show){visibility:hidden;pointer-events:none}
+/* ===== Calendar grid with the work for each day written in each box ===== */
+.chip .c{display:none}.chip .f{display:inline;font-style:normal}.chip .c{font-style:normal}
+.chip.C{background:var(--line);color:var(--fg)}
+.chip small{font-weight:500}
+@media(min-width:701px){.cell{min-height:128px}.chip{white-space:normal}}
+@media(max-width:700px){
+  .grid{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:4px!important}
+  .dowh{display:block!important;text-align:center;font-size:10px;padding:0 0 2px;letter-spacing:.02em}
+  .cell.pad{display:flex!important;background:transparent!important;border:0!important;box-shadow:none!important;min-height:0!important}
+  .cell{min-height:104px!important;flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;gap:3px!important;padding:5px 2px 5px!important;border-radius:10px!important}
+  .cell:hover{transform:none}
+  .dl{display:none!important}
+  .dn{align-self:center!important;font-size:12.5px!important}
+  .cell.today .dn{padding:1px 6px}
+  .chip{font-size:9.5px!important;line-height:1.2!important;padding:2px 3px!important;border-radius:5px!important;border:0!important;text-align:center;overflow-wrap:anywhere;display:block}
+  .chip small{font-size:9px!important;display:inline}
+  .chip .f{display:none}.chip .c{display:inline}
+  .chip.fin{opacity:.42}.chip.fin::before{content:none!important}
+  .chip.R{font-size:9px!important}
+  .ck{margin:auto auto 0!important;justify-content:center;gap:3px}
+  .ck span{width:6px!important;height:6px!important;border-width:1px!important}
+  .month h2{font-size:21px}
+}
+.calhint{font-size:13px;color:var(--muted);margin:-6px 0 0}
+</style>
+  <div class="wrap">
+   <header class="top">
+    <div>
+     <h1>Routine-Fit Planner</h1>
+     <p class="sub">Your routine, unchanged: wake at 5:00 am, college Monday to Saturday 8:00 am to 5:30 pm, study 6:00 to 8:00 pm and 9:00 pm to 12:00 am, dinner 8:00 to 9:00 pm, sleep at 12:00 am. Tick lectures and business sessions as you finish them and every later date re-plans itself.</p>
+    </div>
+    <div class="prog" aria-live="polite">
+     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <b id="pTxt"></b><span class="mono" id="pHrs" style="color:var(--muted)"></span>
+     </div>
+     <div class="bar" id="pBar"></div>
+     <div class="legend" id="pLeg"></div>
+     <div class="stats" id="pStats"></div>
+    </div>
+   </header>
+   <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" aria-selected="true" data-t="cal">Calendar</button>
+    <button role="tab" aria-selected="false" data-t="biz">Business timeline</button>
+    <button role="tab" aria-selected="false" data-t="day">Daily tasks</button>
+    <button role="tab" aria-selected="false" data-t="alarm">Alarms</button>
+    <button role="tab" aria-selected="false" data-t="ai">Assistant</button>
+   </nav>
+   <section class="panel" id="p-cal">
+    <div class="stack">
+     <div class="legend">
+      <span><i class="dot" style="background:var(--pharma)"></i>Pharmacology</span><span><i class="dot" style="background:var(--patho)"></i>Pathology</span><span><i class="dot" style="background:var(--micro)"></i>Microbiology</span><span><i class="dot" style="background:var(--biz)"></i>Business week (W1 to W56)</span><span><i class="dot" style="background:var(--fg)"></i>Class test</span><span><i class="dot" style="background:var(--line)"></i>Revision day</span>
+     </div>
+     <div class="acts">
+      <button class="btn" id="toToday" type="button">Go to today</button>
+      <label for="dlIn" class="mono" style="font-size:12px;color:var(--muted);align-self:center">Finish all lectures by</label> <input type="date" id="dlIn" class="datein">
+     </div>
+     <details class="bulk" id="tests">
+      <summary>Class tests and syllabus <span class="mono" id="tSum" style="font-weight:400;color:var(--muted)"></span></summary>
+      <div class="bulkbody">
+       <p class="sub" style="margin:0;font-size:13px">Add each class test with its date and the lectures it covers. The planner moves those lectures to the front of the queue in order of test date, aims to finish them one day before the test, marks the test and revision day on the calendar, and re-plans everything else around them.</p>
+       <form id="tForm" class="tform">
+        <label>Test name<input id="tIn_n" type="text" maxlength="40" placeholder="Class test 1"></label>
+        <label>Subject<select id="tIn_c"><option value="P">Pharmacology (L1 to L83)</option><option value="H">Pathology (L1 to L77)</option><option value="M">Microbiology (L1 to L52)</option></select></label>
+        <label>Syllabus from L<input id="tIn_f" type="number" min="1" max="83" value="1"></label>
+        <label>to L<input id="tIn_t" type="number" min="1" max="83"></label>
+        <label>Test date<input id="tIn_d" type="date"></label>
+        <button class="btn" type="submit">Add test</button>
+       </form>
+       <p class="sub" id="tErr" style="margin:0;font-size:13px;color:var(--patho)"></p>
+       <div id="tList" class="stack" style="gap:8px"></div>
+      </div>
+     </details>
+     <p class="calhint">Each day box lists the work for that day: Ph = Pharmacology, Pa = Pathology, Mi = Microbiology with lecture numbers, then Biz with the business tasks, plus any test or your own tasks. A faded line means finished. Tap a day for the full list.</p>
+
+     <div id="months"></div>
+     <div class="acts">
+      <button class="btn" id="moreM" type="button">Show 3 more months</button>
+     </div>
+     <div class="drawer" id="drawer" hidden></div>
+    </div>
+   </section>
+   <section class="panel" id="p-biz" hidden>
+    <div class="stack">
+     <div class="bsum" id="bsum"></div>
+     <div class="note">
+      <b>The whole 56-week plan, on your calendar.</b> Each roadmap week is a block of hours. Your free blocks are 2 hours (5:00 to 7:00 am, Monday to Saturday) and two 3-hour blocks on Sunday, about 18 hours a calendar week. Tick each session on the day you do it. A skipped day pushes every later week back, so the dates always show where you really are.
+     </div>
+     <div class="acts" style="align-items:center">
+      <label for="rwIn" style="font-size:14px">Hours per roadmap week</label><input type="number" id="rwIn" min="5" max="80" step="1" class="datein" style="width:76px"><span class="sub mono" style="font-size:12.5px;margin:0">The roadmap assumes full-time (about 40 h). At 36 h, each roadmap week takes about two of your calendar weeks.</span>
+     </div>
+     <div class="gantt" id="gantt"></div>
+     <div id="weeks" class="stack"></div>
+     <div class="note">
+      <b>What is most likely to break this plan.</b> Learning editing and ad structure with equal intensity from day one (get tool comfort first). Editing like general content instead of direct-response (hooks and pattern interrupts are the point). Staying at founding-client rates for too long (raise prices after your first 2 or 3 clients).
+     </div>
+    </div>
+   </section>
+   <section class="panel" id="p-day" hidden>
+    <div class="stack">
+     <div class="dayhead">
+      <div>
+       <div class="mono" id="dkick" style="font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"></div>
+       <h2 id="dtitle" style="font-size:clamp(22px,4.5vw,30px)"></h2>
+      </div>
+      <div class="acts" style="align-items:center">
+       <button class="btn" id="dPrev" type="button" aria-label="Previous day">← Previous</button>
+       <button class="btn" id="dToday" type="button">Today</button>
+       <button class="btn" id="dNext" type="button" aria-label="Next day">Next →</button>
+       <label for="dPick" class="mono" style="font-size:12px;color:var(--muted)">Jump to</label> <input type="date" id="dPick" class="datein">
+      </div>
+     </div>
+     <div class="prog" style="gap:8px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+       <b id="dProg"></b><span class="mono" id="dProgH" style="color:var(--muted)"></span>
+      </div>
+      <div class="bar" id="dBar"></div>
+      <div class="stats" id="dLec"></div>
+     </div>
+     <div id="dBody" class="stack"></div>
+    </div>
+   </section>
+   <section class="panel" id="p-alarm" hidden>
+    <div class="stack">
+     <div class="alarm-top">
+      <div><div class="big" id="aStatus">Alarms are off</div><div class="sub" id="aNext" style="margin:2px 0 0;font-size:13.5px"></div></div>
+      <label class="sw"><input type="checkbox" id="aOn" aria-label="Turn alarms on"><span id="aOnLbl">Off</span></label>
+     </div>
+     <div class="acts" style="align-items:center">
+      <label for="aLead" style="font-size:14px">Ring this many minutes before each block</label>
+      <input type="number" id="aLead" class="datein" min="1" max="60" step="1" value="5" style="width:76px">
+      <button class="btn" id="aTest" type="button">Test alarm</button>
+      <button class="btn" id="aPerm" type="button">Allow notifications</button>
+     </div>
+     <div class="sched">
+      <h3>Alarm for each block <span id="aHint">tick the blocks you want</span></h3>
+      <div id="aList"></div>
+     </div>
+     <div class="note">
+      <b>Keep this page open.</b> Alarms ring from this page, so the browser tab has to stay open (it can sit in the background). On a phone, a locked screen can pause the page, so use your phone's own clock app as a backup for the key times. Turn the alarms on once with the switch above so the browser allows sound.
+     </div>
+    </div>
+   </section>
+   <section class="panel" id="p-ai" hidden>
+    <div class="stack">
+     <div class="note"><b>Tell the planner what changed.</b> Type or speak it, or upload a photo, PDF or video (a timetable, test notice, syllabus, handwritten note, a recorded class announcement). The assistant reads it, proposes schedule changes, and you press Apply. Undo restores the schedule from before.</div>
+     <textarea id="aiTxt" rows="3" class="datein" style="width:100%;font-family:var(--body);font-size:14px" placeholder="e.g. Pharmacology test on 5 Nov covering L1 to L20 / mark Patho L10 to L14 done today / finish all lectures by 20 Dec / add task: submit file tomorrow"></textarea>
+     <div class="acts" style="align-items:center">
+      <input type="file" id="aiFile" accept="image/*,application/pdf,video/*" multiple hidden>
+      <button class="btn" id="aiPick" type="button">Upload image, PDF or video</button>
+      <button class="btn" id="aiMic" type="button">Speak</button>
+      <button class="btn" id="aiGo" type="button" style="background:var(--fg);color:var(--bg)">Read and propose changes</button>
+      <button class="btn" id="aiUndo" type="button" disabled>Undo last change</button>
+     </div>
+     <div id="aiFiles" class="sub mono" style="font-size:12.5px;margin:0"></div>
+     <div id="aiOut" class="sched" hidden></div>
+     <details class="bulk"><summary>AI settings (needed for images, PDFs, video and free-form sentences)</summary><div class="bulkbody">
+      <p class="sub" style="margin:0;font-size:13px">Paste an Anthropic API key. It is stored only in this browser and sent only to api.anthropic.com. Without a key, only simple typed commands work (deadline, mark lectures done, add task, with dates like 2026-11-05, today or tomorrow). Video: 8 frames are read; spoken audio is not.</p>
+      <input id="aiKey" type="password" class="datein" placeholder="sk-ant-..." style="width:100%">
+     </div></details>
+    </div>
+   </section>
+   <button class="theme" id="themeBtn" type="button">Switch light / dark</button>
+  </div>
+  <div id="alarmBanner" role="alert" aria-live="assertive"><span class="ic">⏰</span><div><b id="abT"></b><span class="s" id="abS"></span></div><button type="button" id="abX">Dismiss</button></div>
+  <style id="skin">
+/* Skin layer: a deep-navy hero over a calm cool workspace; cobalt is the one action colour, subject colours stay as data. */
+:root{--brand:#2447f5;--brand-fg:#fff;--brand-t:#e6ebff;--hero:#0e1a30;--hero2:#16294a;--surf2:#f8fafc;--display:'Bricolage Grotesque','Archivo',system-ui,sans-serif;--sh:0 1px 2px rgba(14,26,48,.06),0 12px 28px -14px rgba(14,26,48,.28)}
+:root{--bg:#eceff5}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--brand:#86a2ff;--brand-fg:#0b1220;--brand-t:#1b2748;--hero:#0a1224;--hero2:#14233f;--surf2:#141c27;--bg:#0b1119}}
+:root[data-theme="dark"]{--brand:#86a2ff;--brand-fg:#0b1220;--brand-t:#1b2748;--hero:#0a1224;--hero2:#14233f;--surf2:#141c27;--bg:#0b1119}
+body{background:radial-gradient(1000px 420px at 85% -120px,color-mix(in srgb,var(--brand) 14%,transparent),transparent 70%),var(--bg);font-size:15px}
+.wrap{gap:22px}
+h2{font-size:22px;font-weight:800}
+/* Hero */
+.top{background:linear-gradient(135deg,var(--hero),var(--hero2));color:#f2f5fb;border-radius:22px;padding:clamp(18px,3.5vw,32px);gap:24px;align-items:stretch;box-shadow:var(--sh)}
+.top h1{color:#fff;font-size:clamp(30px,6vw,46px);font-weight:800;letter-spacing:-.025em}
+.top .sub{color:#b7c3d9;font-size:14.5px;line-height:1.6;margin-top:12px}
+.top .prog{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);border-radius:16px;color:#f2f5fb;padding:16px;justify-content:center}
+.top .prog b{font:800 18px var(--display)}
+.top .prog .mono,.top .legend,.top .stats{color:#aab7cf}
+.top .stats b{color:#fff}
+.top .bar{height:12px;border-radius:7px;background:rgba(255,255,255,.14)}
+.top .ahead{color:#7ee2b8!important}.top .behind{color:#ff9db6!important}
+/* Tabs as a segmented control */
+.tabs{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:5px;gap:4px;position:sticky;top:8px;z-index:20;box-shadow:var(--sh)}
+.tabs button{border:0;border-radius:10px;padding:9px 16px;font-size:14px;transition:background .15s,color .15s}
+.tabs button:hover{background:var(--surf2);color:var(--fg)}
+.tabs button[aria-selected="true"]{background:var(--brand);color:var(--brand-fg)}
+/* Buttons and inputs */
+.btn{border-radius:10px;padding:8px 14px;font-weight:600;background:var(--surface);transition:background .15s,border-color .15s}
+.btn:hover{background:var(--brand-t);border-color:var(--brand)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+#aiGo,#aiApply{background:var(--brand)!important;color:var(--brand-fg)!important;border-color:var(--brand)!important}
+.datein,.tform input,.tform select,.trow input{border-radius:9px;background:var(--surface);border-color:var(--line)}
+textarea.datein{padding:12px 14px;line-height:1.5;border-radius:12px}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible,.cell:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.theme{border-radius:999px;align-self:center;padding:7px 14px}
+/* Calendar */
+.month>h2,.month h2{padding-bottom:6px;border-bottom:2px solid var(--fg);display:inline-block;align-self:flex-start}
+.dowh{padding:4px 6px 2px}
+.cell{border-radius:12px;padding:9px;gap:6px;min-height:118px;transition:border-color .12s,transform .12s}
+.cell:not(.pad):hover{border-color:var(--brand);transform:translateY(-1px)}
+.cell.sel{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand)}
+.cell.today{background:var(--brand-t);border-color:var(--brand)}
+.cell.today .dn{background:var(--brand);color:var(--brand-fg);border-radius:6px;padding:1px 7px}
+.dn{font-size:13px}
+.chip{border-radius:6px;padding:3px 7px;font-size:11.5px;border-left:3px solid currentColor}
+.chip.R{border-left-color:var(--muted)}
+.ck span{width:10px;height:10px}
+@media(max-width:700px){.cell{padding:11px 12px}}
+/* Panels, cards, tables */
+.drawer{border:1px solid var(--line);border-top:4px solid var(--brand);border-radius:16px;padding:20px;box-shadow:var(--sh)}
+.chk{border-radius:12px;transition:border-color .12s,background .12s}
+.chk:hover{border-color:var(--brand);background:var(--surf2)}
+.chk:has(input:checked){background:var(--surf2)}
+.chk input,.lrow input[type=checkbox]{accent-color:var(--brand)}
+.sched,.tbl,.lbox,.gantt,.bulk,details.ph,.blk,.bsum div,.prog,.titem{border-radius:14px}
+.sched h3,.blk .bh b{font-family:var(--display);font-weight:800}
+.sched h3{background:var(--surf2)}
+.note{border-radius:14px;border-left:5px solid var(--biz);padding:16px 18px;line-height:1.6}
+.bsum div{border-top:3px solid var(--brand)}
+.bsum b{font-size:20px}
+.wk.cur{background:var(--brand-t)}
+.bulk summary,details.ph>summary{padding:14px 16px}
+.bulk[open]>summary{border-bottom:1px solid var(--line)}
+.tk i{border-radius:5px}
+th{background:var(--surf2)}
+#aiOut{border-color:var(--brand)}
+#aiOut h3{background:var(--brand-t)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<script>
+const SUBS=[{c:'P',name:'Pharmacology',short:'Pharma',n:83,avg:66,col:'var(--pharma)'},{c:'H',name:'Pathology',short:'Patho',n:77,avg:51,col:'var(--patho)'},{c:'M',name:'Microbiology',short:'Micro',n:52,avg:51,col:'var(--micro)'}];
+const SUB=Object.fromEntries(SUBS.map(s=>[s.c,s]));
+const TIMES={P:[68, 8, 61, 82, 43, 79, 57, 50, 63, 47, 76, 63, 82, 74, 120, 113, 98, 74, 116, 55, 62, 39, 40, 72, 82, 41, 57, 107, 20, 63, 106, 39, 91, 31, 98, 122, 81, 90, 48, 88, 98, 76, 48, 106, 29, 27, 115, 99, 102, 31, 37, 62, 62, 128, 48, 65, 84, 82, 63, 67, 90, 49, 41, 86, 52, 74, 59, 59, 48, 27, 42, 43, 84, 76, 101, 95, 131, 72, 60, 60, 140, 60, 93],H:[37, 50, 54, 51, 45, 101, 75, 61, 31, 96, 49, 68, 71, 26, 34, 44, 56, 51, 65, 51, 51, 68, 36, 61, 35, 31, 17, 59, 62, 36, 41, 35, 58, 44, 43, 40, 15, 43, 66, 60, 53, 40, 75, 53, 41, 47, 26, 40, 83, 59, 39, 43, 22, 56, 45, 48, 62, 56, 54, 35, 61, 52, 19, 5, 30, 44, 30, 73, 28, 35, 82, 17, 90, 64, 23, 12, 20],M:[37, 56, 41, 69, 28, 63, 64, 87, 52, 45, 18, 60, 78, 84, 34, 50, 81, 53, 38, 52, 15, 30, 49, 43, 41, 51, 51, 21, 25, 43, 45, 10, 23, 33, 45, 23, 55, 43, 57, 30, 50, 56, 31, 74, 68, 35, 36, 61, 49, 41, 31, 34]};
+const LECT=[];SUBS.forEach(s=>{for(let i=1;i<=s.n;i++)LECT.push({id:s.c+i,c:s.c,i,min:TIMES[s.c][i-1]||s.avg})});
+const LBY=Object.fromEntries(LECT.map(l=>[l.id,l]));
+const PH=[
+ {n:1,name:'Learn to edit and ad structure',w:[1,6],cp:'Basic-to-intermediate comfort in Premiere Pro, a portfolio of 4 to 6 ad-style edits with varied hooks, and the vocabulary of ad performance.',inc:'$0, expected'},
+ {n:2,name:'First clients',w:[7,16],cp:'4 to 6 retainer clients, real performance data backing your pitch, reusable templates, noticeably faster editing, and a clear read on time per client.',inc:'$300 to $6,500 a month'},
+ {n:3,name:'Systemize and hire your first editor',w:[17,28],cp:'9 to 11 clients, 1 editor supporting delivery, documented SOPs, higher pricing on new signups, performance-based case studies.',inc:'$6,500 to $18,000 a month'},
+ {n:4,name:'Scale the team and the offer',w:[29,42],cp:'About 17 to 21 clients across two tiers, a small team (2 to 3 editors plus you), predictable recurring revenue, case studies with hard numbers.',inc:'$18,000 to $42,000 a month'},
+ {n:5,name:'Final push to $60K a month',w:[43,56],cp:'Sustained $60,000 a month in recurring revenue and a team structure that does not depend on you editing every video.',inc:'$42,000 to $60,000 a month'}
+];
+const BLK=[
+ [1,1,'Learn Adobe Premiere Pro','Install Premiere Pro and follow ONE beginner course start to finish: project and sequence setup, the timeline, razor and ripple edits, keyframes, transitions, captions, Essential Graphics text, export. Re-cut random footage daily.','You can cut, caption and export a 30 second vertical clip without looking anything up.','$0'],
+ [2,2,'Practise and study ads','Keep practising in Premiere Pro daily. Study 20 to 30 top-performing ads in one product category in the Meta Ad Library and TikTok Ad Library. Save hooks in a swipe file.','A swipe file of 25+ ads with notes on each hook.','$0'],
+ [3,3,'Pick a niche','Commit to ONE product category (beauty, supplements, apparel, gadgets). Study 30 to 40 more ads in it: what the first 2 seconds do, where the agitate moment lands, how the offer is revealed.','One chosen niche and a written list of repeating patterns.','$0'],
+ [4,4,'Direct-response fundamentals','Study problem-agitate-solution, pattern interrupts and hook writing. Learn hook rate, hold rate, CTR and CPA so you know what you are judged on.','You can explain why a given ad works using those terms.','$0'],
+ [5,5,'Ad-specific editing','In Premiere Pro: fast cuts with keyboard shortcuts, auto-generated captions, Essential Graphics text styles, audio levels and sound effects, native UGC feel (not over-polished). Save caption and text styles as presets.','Edits that look like real ads, not general video.','$0'],
+ [6,6,'Build a spec portfolio','Re-cut 4 to 6 raw UGC clips (stock UGC, creator content with permission, or your own footage) into ad edits with different hooks. Export each as a vertical 9:16 H.264 file.','Portfolio ready to send.','$0'],
+ [7,7,'Build your offer and list','Decide pricing: per video, or a monthly retainer for X variations (retainers are the goal). Build a list of 50 to 100 DTC brands actively running ads, from the ad libraries.','Written offer and a list of 50+ brands.','$0'],
+ [8,8,'Start outreach','DM or email 15 to 20 brands or their marketing managers and media buyers a day. Lead with a portfolio edit for their product category. Offer one free or discounted test edit.','Daily outreach habit running.','$0'],
+ [9,9,'Keep outreach going','You are newer, so expect a lower response rate: make up for it with volume. Keep daily outreach steady instead of pausing to perfect the pitch.','Replies coming in.','$0'],
+ [10,10,'Land your first client','Close one founding client at $300 to 600 a month for a small package, for a real testimonial and performance data.','First paying client.','About $300 to 600'],
+ [11,11,'Deliver fast and track results','Turn edits around quickly, even if it takes longer per video than it eventually will. Ask the client for basic performance data (CPA, hook rate).','Client sharing results with you.','About $600 to 1,000'],
+ [12,12,'Land a second client','Use real performance data ("this hook dropped CPA by 20%") as proof in outreach. It is a much stronger pitch than the portfolio alone.','Second client signed.','About $1,200 to 1,800'],
+ [13,13,'Refine your workflow','Build templates (caption styles, transitions, hook formats) to speed up turnaround per video.','Templates cut your hours per video.','About $1,800 to 2,800'],
+ [14,14,'Land a third client','Keep outreach volume steady. Ask early clients for referrals within their network.','Third client signed.','About $2,800 to 3,800'],
+ [15,15,'Fourth and fifth client','Your speed and quality are noticeably better than in week 10. Use that to justify slightly higher pricing on new signups.','4 to 5 clients.','About $3,800 to 5,200'],
+ [16,16,'Review capacity','Check your hours per video and hours per client. This tells you when hiring becomes necessary.','A clear capacity number.','About $5,200 to 6,500'],
+ [17,19,'Document your process','Write an SOP: hook formats that work per category, caption and branding style guides per client, export specs, turnaround workflow.','SOP written.','About $6,500 to 8,500'],
+ [20,22,'Hire your first editor','Bring on a freelance editor (paid from client revenue) to handle templated cuts, while you focus on hooks, strategy and client relationships.','First editor delivering.','About $8,500 to 11,500'],
+ [23,25,'Raise prices for new clients','With performance data across several clients, raise new-client retainers to $1,000 to 2,200 a month depending on volume.','New clients signing at higher prices.','About $11,500 to 15,000'],
+ [26,28,'Add a referral system','Brand owners and media buyers move between companies and know other brands. Incentivize referrals directly.','Referrals arriving.','About $15,000 to 18,000'],
+ [29,32,'Hire a second editor','Split work by client group or ad format (static plus video vs pure video) so volume can grow without you being the bottleneck.','Second editor delivering.','About $18,000 to 24,000'],
+ [33,36,'Introduce tiered packages','Add a premium tier at $2,800 to 5,500 a month: more variations, scriptwriting and hook ideation, performance-based creative refreshes, for bigger-spend brands.','Premium tier sold.','About $24,000 to 31,000'],
+ [37,39,'Add a project manager and QC layer','With 3+ editors, someone (or you, formally) handles client communication, brief intake and quality control before delivery.','QC step before every delivery.','About $31,000 to 37,000'],
+ [40,42,'Expand acquisition channels','Add referrals and light personal-brand content (before and after ad breakdowns, performance case studies posted publicly) to reduce reliance on cold outreach.','Inbound leads arriving.','About $37,000 to 42,000'],
+ [43,46,'Upsell existing clients','Offer add-ons (hook ideation and scriptwriting, static ad design, more monthly variations) to raise revenue per client without new logos.','Higher revenue per client.','About $42,000 to 48,000'],
+ [47,50,'Close the gap with new clients','Keep outreach and referrals running. Prioritize brands with larger ad spend: they need more creative volume and pay more per package.','Larger-spend brands signed.','About $48,000 to 54,000'],
+ [51,53,'Tighten retention and QC','Standardize brief intake and review steps so quality holds as the team grows. Creative fatigue means clients need steady fresh output, and a quality dip loses accounts fast.','Retention steady.','About $54,000 to 57,500'],
+ [54,56,'Goal check','Reassess: sustained $60,000 a month in recurring revenue, and a team that does not depend on you personally editing every video.','$60,000 a month.','$60,000 a month']
+];
+const ROAD=[];
+BLK.forEach(([s,e,t,a,d,inc])=>{for(let w=s;w<=e;w++){ROAD.push({w,t:e>s?`${t} (${w-s+1} of ${e-s+1})`:t,a,d,inc,bs:s,be:e,ph:PH.find(p=>w>=p.w[0]&&w<=p.w[1])})}});
+/* Daily business tasks. s = steps spread across the block in order ("Label: detail"); h = habits repeated every session. */
+const DT={
+1:{h:["Edit any practice clip for 20 minutes (cut, trim, export)"],s:[
+ "Setup: Install Premiere Pro, make a project folder, download the course practice files",
+ "Ch 1–2: Watch getting started and the interface, follow along",
+ "Ch 3–4: Source monitor and timeline workflow",
+ "Ch 5–7: Free stock assets, sequences and media properties",
+ "Clip 1: Download 8 to 10 clips from Pexels and cut a 30 second vertical clip",
+ "Ch 8–9: Basic transitions and the first editing project",
+ "Ch 10–11: Automate to sequence, text, shapes and graphics",
+ "Ch 12–13: Shape masking and track matte key",
+ "Ch 14: Keyframe animation, add a slow zoom to your clip",
+ "Ch 15–16: Advanced masking and green screen",
+ "Ch 17–18: Audio sync and auto captions",
+ "Ch 19–20: Roman Urdu captions and the complete editing project",
+ "Re-cut: Rebuild your 30 second clip without help and export it"]},
+2:{h:["Study 3 ads in Meta Ad Library or TikTok Top Ads and save the hooks"],s:[
+ "Ch 21: Speed ramping on one clip",
+ "Ch 22: Audio editing, add music and sound effects",
+ "Ch 23–24: Colour correction and skin tone",
+ "Ch 25–26: Custom LUT, insert, overwrite, lift and extract",
+ "Ch 27: J-cuts, L-cuts and match cuts",
+ "Ch 28–29: Premiere tools and Film Impact extension",
+ "Ch 30: Blending modes",
+ "Ch 31–32: Auto reframe to 9:16 and multicam",
+ "Ch 33–35: Proxies, export settings and project manager",
+ "Practice: Recut your clip with a speed ramp, J-cut and colour grade, export 9:16",
+ "Swipe file: Check you have 25+ ads with a note on each hook"]},
+3:{h:["Rebuild one ad shot by shot (20 minutes)"],s:[
+ "Niche: Pick ONE category (beauty, supplements, apparel or gadgets)",
+ "Ads 1–10: Study 10 ads in your niche",
+ "Ads 11–20: Study 10 more ads",
+ "Ads 21–30: Study 10 more ads",
+ "Ads 31–40: Study 10 more ads",
+ "First 2 seconds: Write what the opening does in each ad",
+ "Agitate: Note where the problem moment lands",
+ "Offer: Note how the offer is revealed",
+ "Patterns: Write a one page list of repeating patterns"]},
+4:{h:["Write why 2 ads work (use hook, hold, CTR words)"],s:[
+ "PAS: Learn problem-agitate-solution and find 3 ads that use it",
+ "Pattern interrupts: List 5 examples from real ads",
+ "Hooks: Write 10 hooks for one product",
+ "Hook rate: Learn what it measures",
+ "Hold rate: Learn what it measures",
+ "CTR and CPA: Learn both and why they matter",
+ "Edit: Make 3 hook versions of one clip",
+ "Explain: Say why 3 ads work using these terms"]},
+5:{h:["Edit one ad-style clip using your presets"],s:[
+ "Shortcuts: Practise fast cuts with keyboard shortcuts",
+ "Captions: Build and save an auto-caption preset",
+ "Text: Save 2 Essential Graphics text styles as presets",
+ "Audio: Set levels and add sound effects",
+ "Native feel: Edit a clip so it looks like real UGC, not polished",
+ "Edit 3 clips: Use your presets on 3 different clips",
+ "Compare: Match one edit to a top ad frame by frame",
+ "Fix: Correct the gaps you found"]},
+6:{h:["Export and watch each edit on your phone"],s:[
+ "Pick clips: Choose 4 to 6 raw clips (Pexels, Pixabay, Coverr)",
+ "Edit 1: Cut ad 1 with hook A",
+ "Edit 2: Cut ad 2 with hook B",
+ "Edit 3: Cut ad 3 with hook C",
+ "Edit 4: Cut ad 4",
+ "Edit 5–6: Cut ads 5 and 6 if you have the clips",
+ "Export: 9:16 H.264 for every edit",
+ "Check: Watch all files on your phone and fix mistakes",
+ "Folder: Put them in one portfolio folder or Drive link"]},
+7:{h:["Add 5 brands to your list"],s:[
+ "Pricing: Decide per video or monthly retainer",
+ "Offer: Write what is included (variations, turnaround)",
+ "Founding rate: Set your first client price",
+ "Brands 1–25: Find brands running ads in the ad libraries",
+ "Brands 26–50: Find 25 more",
+ "Brands 51–75: Find 25 more",
+ "Contacts: Save each page, email or DM link",
+ "Check: 50+ brands ready, offer written"]},
+8:{h:["Send 15 to 20 messages with a portfolio edit","Reply to anyone who answered"],s:[
+ "Templates: Write a short DM and a short email",
+ "Match edits: Pick the best portfolio edit for each category",
+ "Test edit offer: Write your free or discounted test edit offer",
+ "First batch: Send your first 15 to 20 messages",
+ "Tracker: Log sent, replied and booked in a sheet",
+ "Improve: Change the opening line after 3 days"]},
+9:{h:["Send 15 to 20 messages","Follow up on yesterday’s messages"],s:[
+ "Volume: Keep sending, do not stop to perfect the pitch",
+ "Replies: Answer every reply the same day",
+ "Calls: Book short calls with interested brands",
+ "Test edits: Start test edits for interested brands",
+ "Tracker: Update your sheet"]},
+10:{h:["Send 15 to 20 messages","Follow up warm replies"],s:[
+ "Shortlist: Pick the 3 warmest leads",
+ "Test edit: Make a free or discounted edit for each",
+ "Send: Send each test edit with a short note",
+ "Close: Ask for the retainer at $300 to $600",
+ "Agreement: Agree scope, price and delivery dates in writing",
+ "Payment: Get the first payment",
+ "Onboard: Collect brand files and the brief"]},
+11:{h:["Reply to client messages within the day"],s:[
+ "Plan: Agree this week’s videos with the client",
+ "Edit 1: Deliver the first video fast",
+ "Edit 2: Deliver the second video",
+ "Feedback: Fix changes and note what the client likes",
+ "Data: Ask for CPA and hook rate",
+ "Log: Save results in a case-study note"]},
+12:{h:["Send 15 to 20 messages using your real results"],s:[
+ "Proof: Write one result line (for example CPA dropped 20%)",
+ "Pitch: Put the result line at the top of your message",
+ "Target: List 20 brands in the same niche as client 1",
+ "Send: Message them with the result and a sample edit",
+ "Calls: Book calls from replies",
+ "Close: Sign client 2",
+ "Onboard: Collect the brief and files for client 2"]},
+13:{h:["Save any repeated edit as a template"],s:[
+ "Captions: Save a caption style template",
+ "Transitions: Save your best transitions as presets",
+ "Hook formats: Build 3 hook templates",
+ "Project: Make a template project with bins and sequences",
+ "Time test: Edit a video using templates and log the time",
+ "Compare: Note hours saved per video"]},
+14:{h:["Send 15 to 20 messages","Ask one past client for a referral"],s:[
+ "Referrals: Write a short referral request",
+ "Send: Ask each client for 1 to 2 intros",
+ "Outreach: Keep volume steady",
+ "Calls: Book calls with new leads",
+ "Close: Sign client 3",
+ "Deliver: Keep clients 1 and 2 on time"]},
+15:{h:["Send 15 to 20 messages","Deliver on time for every client"],s:[
+ "Clients 4–5: Close two more clients",
+ "Price: Quote new clients a little higher",
+ "Speed: Compare your time per video with Week 10",
+ "Workflow: Fix what slows you down",
+ "Referrals: Ask for introductions again"]},
+16:{h:["Log hours spent on each client video"],s:[
+ "Log: Record hours per video for each client",
+ "Total: Add up hours per client per month",
+ "Capacity: Work out how many clients you can handle alone",
+ "Income: Compare income to hours",
+ "Plan: Decide when to hire (write the date or client count)"]},
+17:{h:["Deliver client work on time"],s:[
+ "Hook formats: Write hook formats that work per category",
+ "Examples: Add examples for each hook format",
+ "Style guide 1: Write caption and branding rules for client 1",
+ "Style guides: Write the same for every other client",
+ "Export specs: List export settings per platform",
+ "Workflow: Write turnaround steps from brief to delivery",
+ "Checklist: Make a pre-delivery checklist",
+ "Review: Read the document as if you were a new editor",
+ "Finish: Clean up the process document"]},
+20:{h:["Deliver client work on time"],s:[
+ "Job post: Write what the editor will do",
+ "Find: Post the job and collect applicants",
+ "Test: Give 3 applicants a paid test edit",
+ "Choose: Pick the best editor",
+ "Train: Share the process document and templates",
+ "First job: Give them templated cuts",
+ "Review: Check their first delivery",
+ "Pay: Pay on time and give feedback",
+ "Volume: Give them steady weekly work"]},
+23:{h:["Deliver client work on time"],s:[
+ "Data: Collect results from several clients",
+ "Case study: Write a one page result summary",
+ "New price: Set new retainers at $1,000 to $2,200",
+ "Pitch: Use the new price in outreach",
+ "Calls: Book calls and quote the new price",
+ "Close: Sign new clients at the higher price",
+ "Check: Confirm new clients are paying the new rate"]},
+26:{h:["Deliver client work on time"],s:[
+ "Reward: Design a referral reward",
+ "Message: Write the referral ask",
+ "Ask: Send it to every client",
+ "Network: Message media buyers and brand owners you know",
+ "Track: Log every referral",
+ "Thank: Thank each referrer",
+ "Review: See how many referrals became clients"]},
+29:{h:["Check editor deliveries","Keep client messages answered"],s:[
+ "Split: Decide who handles which clients or formats",
+ "Job post: Post the job for editor 2",
+ "Test: Run paid test edits",
+ "Hire: Choose editor 2",
+ "Onboard: Share the process document and templates",
+ "Hand over: Give editor 2 their first clients",
+ "First week: Check the quality of editor 2’s work",
+ "Adjust: Rebalance work between editors",
+ "Capacity: Check that volume can grow without you",
+ "Review: Write what to fix in your split"]},
+33:{h:["Check editor deliveries"],s:[
+ "Premium tier: Define what is included (scripts, hook ideas, refreshes)",
+ "Price: Set it between $2,800 and $5,500",
+ "Offer page: Write a short offer page",
+ "List: Pick 20 bigger-spend brands",
+ "Pitch: Send the premium offer",
+ "Calls: Book calls",
+ "Close: Sign the first premium client",
+ "Deliver: Run the premium client’s first month",
+ "Feedback: Ask the premium client what to improve",
+ "Refine: Update the premium offer"]},
+37:{h:["Check editor deliveries"],s:[
+ "Roles: Write who handles briefs and client messages",
+ "QC list: Write a quality checklist",
+ "Assign: Choose a project manager or take the role yourself",
+ "Brief form: Make a standard brief intake form",
+ "Rule: Nothing is delivered without a QC check",
+ "Test: Run QC on a week of deliveries",
+ "Fix: Improve the checklist from mistakes"]},
+40:{h:["Check editor deliveries"],s:[
+ "Content plan: List 10 before-and-after ad breakdown ideas",
+ "Post 1: Publish a breakdown",
+ "Post 2: Publish a performance case study",
+ "Post 3: Publish another breakdown",
+ "Referrals: Ask clients for intros",
+ "Inbound: Reply to every lead within a day",
+ "Track: Log where each lead came from"]},
+43:{h:["Check editor deliveries"],s:[
+ "Add-ons: Write add-ons you can sell (hooks, scripts, static ads, more variations)",
+ "Prices: Set a price for each add-on",
+ "Targets: Pick 5 clients to offer add-ons",
+ "Offer: Send the offers",
+ "Calls: Talk through each offer",
+ "Close: Sign upsells",
+ "Deliver: Start the add-on work",
+ "Review: Check the new revenue per client",
+ "Repeat: Offer add-ons to the next 5 clients"]},
+47:{h:["Check editor deliveries"],s:[
+ "Targets: List 20 brands with large ad spend",
+ "Pitch: Write the offer for bigger brands",
+ "Send: Message 10 of them",
+ "Follow up: Follow up with the rest",
+ "Calls: Book calls",
+ "Close: Sign a larger-spend brand",
+ "Referrals: Keep asking for intros",
+ "Onboard: Set up the new brand’s brief and team",
+ "Review: Check what worked in the pitch"]},
+51:{h:["Check editor deliveries"],s:[
+ "Brief intake: Standardise how briefs arrive",
+ "Review steps: Write a two-step review before delivery",
+ "Fatigue: Plan fresh creative for each client every month",
+ "Retention: Check every client’s last 60 days of results",
+ "At risk: Talk to any client who looks unhappy",
+ "Fix: Update checklists from what you find"]},
+54:{h:["Check editor deliveries"],s:[
+ "Revenue: Check monthly recurring revenue",
+ "Team: Check who does what (does it still depend on you?)",
+ "Gaps: Write what is blocking $60,000 a month",
+ "Plan: Write the next 3 actions",
+ "Do: Start the first action"]}
+};
+function bizTasks(d){
+  const b=B.days[d];if(!b)return null;
+  const rw=RW(),w=Math.min(Math.floor(b.start/rw),NW-1),r=ROAD[w],D=DT[r.bs];
+  if(!D)return null;
+  const L=D.s.length,bh=(r.be-r.bs+1)*rw,from=Math.max(0,b.start-(r.bs-1)*rw),to=from+b.u*b.h;
+  const i0=Math.min(L-1,Math.floor(from/bh*L)),i1=Math.min(L-1,Math.max(i0,Math.ceil(to/bh*L)-1));
+  const items=[];
+  for(let i=i0;i<=i1;i++){const x=D.s[i],k=x.indexOf(': ');items.push({key:'bt'+i,label:x.slice(0,k),text:x.slice(k+2)})}
+  const habits=D.h.map((x,j)=>({key:'bh'+j,label:x,text:'Do this every session'}));
+  return{items,habits};
+}
+const YT='https://youtu.be/OgRo9abQD0c';
+const CH=[['Getting Started','03:34'],['Premiere Pro Interface & Workflow','09:13'],['Source Monitor','21:27'],['Timeline Workflow','30:03'],['Free Stock Assets','38:45'],['Creating a Sequence','43:12'],['Media Properties','50:02'],['Basic Transitions','53:29'],['First Editing Project','1:06:28'],['Automate to Sequence','1:08:57'],['Text, Shapes & Graphics','1:15:50'],['Shape Masking','1:27:45'],['Track Matte Key','1:36:28'],['Keyframe Animation','1:57:54'],['Advanced Masking','2:12:08'],['Green Screen','2:39:49'],['Audio Synchronization','2:51:03'],['Auto Captions & Subtitles','2:58:10'],['Roman Urdu Captions','3:11:12'],['Complete Editing Project','3:14:03'],['Speed Ramping','3:42:48'],['Audio Editing & Effects','3:57:18'],['Color Correction & Grading','4:28:34'],['Skin Tone Correction','4:51:51'],['Create Custom LUT','5:18:28'],['Insert, Overwrite, Lift & Extract','5:22:33'],['J-Cuts, L-Cuts & Match Cuts','5:36:53'],['Premiere Pro Tools','5:45:57'],['Film Impact Extension','6:01:23'],['Blending Modes','6:20:50'],['Auto Reframe','6:27:33'],['Multicam Editing','6:30:18'],['Creating Proxies','6:41:42'],['Export Settings','6:49:54'],['Project Manager','6:57:34']];
+const secs=t=>{const a=t.split(':').map(Number);return a.length===3?a[0]*3600+a[1]*60+a[2]:a[0]*60+a[1]};
+const rg=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
+const LK={pex:['Pexels videos','https://www.pexels.com/videos/'],pix:['Pixabay videos','https://pixabay.com/videos/'],mix:['Mixkit (video, music, sound effects)','https://mixkit.co/free-stock-video/'],cov:['Coverr','https://coverr.co/'],meta:['Meta Ad Library','https://www.facebook.com/ads/library/'],tt:['TikTok Creative Center','https://ads.tiktok.com/business/creativecenter/pc/en'],tth:['How to use TikTok Top Ads','https://ads.tiktok.com/help/article/top-ads'],files:['Course practice files (Drive link is in the video description)',YT]};
+const RES={
+ 1:{ch:rg(1,20),pr:[
+  {t:'Session 1, after ch 1 to 8: download 8 to 10 clips and cut a 30 second vertical sequence with 2 transitions.',u:['pex','pix']},
+  {t:'Session 2, after ch 9 and 10: redo the First Editing Project from memory, then again with different clips.',u:['files','mix']},
+  {t:'Session 3, after ch 11 to 13: add a title, a shape mask and a track matte to the same clip.',u:['cov']},
+  {t:'Session 4, after ch 14 to 17: keyframe a slow zoom and sync separate audio to a clip.'},
+  {t:'Session 5, after ch 18 to 20: auto-caption the clip, then follow the Complete Editing Project (ch 20) without pausing.'}]},
+ 2:{ch:rg(21,35),pr:[
+  {t:'Session 1, ch 21 and 27: speed ramp and add a J-cut and L-cut on one clip.'},
+  {t:'Session 2, ch 22: clean the audio and add free music and sound effects.',u:['mix']},
+  {t:'Session 3, ch 23 and 24: colour correct and grade the clip.'},
+  {t:'Session 4, ch 31 and 34: Auto Reframe to 9:16 and export with the course export settings.'},
+  {t:'Daily study (20 to 30 ads): save the hook of each ad in your swipe file with a one-line note.',u:['meta','tt']}]},
+ 3:{pr:[
+  {t:'Study 30 to 40 ads in your niche. Note what the first 2 seconds do and where the offer appears.',u:['meta','tt']},
+  {t:'In TikTok Top Ads, log in (logged-out users see only 5 ads) and open See Analytics to find the best second of each ad.',u:['tth']},
+  {t:'Practice: rebuild one ad shot by shot every day (20 minutes) with free clips.',u:['pex','mix']}]},
+ 4:{pr:[
+  {t:'Write 3 different hooks for the same product, then edit all 3 versions of one clip and export each.',u:['pex','pix']},
+  {t:'Open 5 ads daily and write hook rate, hold rate, CTR and CPA beside what you think made each one work.',u:['meta','tt']}]},
+ 5:{ch:[11,18,21,22,31],pr:[
+  {t:'Build and save caption and text style presets (ch 11 and 18).'},
+  {t:'Speed ramps, sound effects and audio levels on 3 clips (ch 21 and 22), then make each look like a real UGC ad, not over-polished.',u:['mix','cov']},
+  {t:'Compare your edit with a top ad frame by frame and fix the gap.',u:['tt','meta']}]},
+ 6:{ch:[31,34],pr:[
+  {t:'Re-cut 4 to 6 raw clips into ad edits with different hooks. Search for hand-held selfie, unboxing and product review clips.',u:['pex','pix','cov']},
+  {t:'Export each as vertical 9:16 H.264 using the ch 34 settings and check the files on your phone.'}]}
+};
+function resHTML(wk,open){
+  const r=RES[wk];if(!r)return '';
+  const a=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
+  let h='';
+  if(r.ch)h+=`<b>Video course</b>`+a(YT,'Adobe Premiere Pro Masterclass, Hammad Sayed (7+ hours, Hindi and Urdu)')+r.ch.map(n=>{const c=CH[n-1];return a(`${YT}?t=${secs(c[1])}`,`Ch ${n}: ${c[0]} <span class="mono">${c[1]}</span>`)}).join('');
+  if(r.pr)h+=`<b>Practice sessions</b>`+r.pr.map(p=>`<div>${p.t}${(p.u||[]).map(k=>' '+a(LK[k][1],LK[k][0])).join(' · ')}</div>`).join('');
+  return `<details class="res"${open?' open':''}><summary>Course chapters, practice sessions and links</summary>${h}</details>`;
+}
+const NW=ROAD.length;
+const TOL=.45;
+/* Capacity ladder (lecture hours per day). The planner uses the lightest level that still meets the deadline.
+   w = Monday to Saturday (6-8 pm and 9 pm to 11:40 pm), s = Sunday (adds the 1:00-5:30 pm block). */
+const LV=[{w:4.2,s:4.2,name:'Normal routine'},{w:4.2,s:6.2,name:'Sunday afternoon added'},{w:4.5,s:7.2,name:'Sunday afternoon + longer weekday blocks'},{w:4.7,s:7.7,name:'Maximum load'}];
+let LVI=0;
+const DEFAULT_DL='2026-12-15';
+const REV=1; /* revision days kept free before each class test */
+const START='2026-10-11';
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const dt=s=>new Date(s+'T00:00:00');
+const add=(s,n)=>{const d=dt(s);d.setDate(d.getDate()+n);return ymd(d)};
+const diff=(a,b)=>Math.round((dt(b)-dt(a))/864e5);
+const real=ymd(new Date());
+const today=real<START?START:real;
+const fmtL=s=>dt(s).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+const fmtS=s=>dt(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const isSun=s=>dt(s).getDay()===0;
+const units=s=>isSun(s)?2:1;
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+function defaults(){return{v:2,tests:[],dl:DEFAULT_DL,rw:36,done:{},mins:{},biz:{},x:{},custom:{},conf:Object.fromEntries(LECT.map(l=>[l.id,1]))}}
+let S=defaults();
+try{const raw=localStorage.getItem('planner-v5');if(raw){const p=JSON.parse(raw);if(p&&p.done)S={v:2,tests:p.tests||[],dl:(p.v>=2&&p.dl)?p.dl:DEFAULT_DL,rw:p.rw||36,done:p.done,mins:p.mins||{},biz:p.biz||{},x:p.x||{},custom:p.custom||{},conf:p.conf||defaults().conf}}}catch(e){}
+const RW=()=>Math.max(5,Math.min(80,+S.rw||36));
+function save(){try{localStorage.setItem('planner-v5',JSON.stringify(S))}catch(e){}}
+const mins=(st,l)=>st.mins[l.id]!=null?st.mins[l.id]:l.min;
+
+function plan(st,t,lv){
+  const tot={},dm={};SUBS.forEach(s=>{tot[s.c]=0;dm[s.c]=0});
+  const taken=new Set(),pre=[];
+  (st.tests||[]).filter(x=>x.date>t).slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0).forEach(x=>{for(let i=x.from;i<=x.to;i++){const l=LBY[x.c+i];if(l&&!st.done[l.id]&&!taken.has(l.id)){taken.add(l.id);pre.push(l)}}});
+  const q={P:[],H:[],M:[]};
+  LECT.forEach(l=>{const m=mins(st,l);tot[l.c]+=m;if(st.done[l.id]||taken.has(l.id))dm[l.c]+=m;else q[l.c].push(l)});
+  const pos={P:0,H:0,M:0},order=pre.slice();
+  for(;;){
+    let best=null,bf=9;
+    for(const s of SUBS){if(pos[s.c]<q[s.c].length){const f=dm[s.c]/tot[s.c];if(f<bf-1e-9){bf=f;best=s.c}}}
+    if(!best)break;
+    const l=q[best][pos[best]++];order.push(l);dm[best]+=mins(st,l);
+  }
+  const planned={},when={};
+  let d=t,budget=0,spent=0,idx=0,guard=0;
+  let doneToday=0;LECT.forEach(l=>{if(st.done[l.id]===t)doneToday+=mins(st,l)/60});
+  const fin={};
+  while(idx<order.length&&guard++<500){
+    const cap=isSun(d)?lv.s:lv.w;budget+=cap;
+    let used=0;
+    if(d===t){spent+=Math.min(doneToday,budget);used=doneToday}
+    while(idx<order.length){
+      const l=order[idx],du=mins(st,l)/60;
+      if(spent+du>budget+TOL)break;
+      if(used>0&&used+du>cap+.7)break;
+      (planned[d]=planned[d]||[]).push(l);when[l.id]=d;fin[l.c]=d;used+=du;spent+=du;idx++;
+    }
+    d=add(d,1);
+  }
+  let last=t;
+  Object.keys(planned).forEach(k=>{if(k>last)last=k});
+  Object.values(st.done).forEach(k=>{if(k>last)last=k});
+  return{planned,finish:last,fin,when};
+}
+function doneByDate(st){const m={};Object.entries(st.done).forEach(([id,d])=>{(m[d]=m[d]||[]).push(LBY[id])});return m}
+
+function bizPlan(){
+  const rw=RW(),total=NW*rw;
+  const days={},weeks=[];for(let w=0;w<NW;w++)weeks.push({start:null,end:null,done:0,n:rw});
+  let c=0,d=START;
+  while(c<total-1e-9&&diff(START,d)<1800){
+    const u=units(d),h=isSun(d)?3:2;
+    const tick=Math.min(S.biz[d]||0,u);
+    const n=d<today?tick:u;
+    const dd=d<=today?tick:0;
+    days[d]={start:c,n,tick:dd,u,h};
+    for(let k=0;k<n;k++){
+      let from=c+k*h,to=from+h;
+      for(let w=Math.floor(from/rw);w<NW&&w*rw<to;w++){
+        const ov=Math.min(to,(w+1)*rw)-Math.max(from,w*rw);
+        if(ov<=0)continue;
+        if(weeks[w].start===null||d<weeks[w].start)weeks[w].start=d;
+        if(weeks[w].end===null||d>weeks[w].end)weeks[w].end=d;
+        if(k<dd)weeks[w].done+=ov;
+      }
+    }
+    c+=n*h;d=add(d,1);
+  }
+  return{days,weeks,lastDay:add(d,-1)};
+}
+
+let P,B,DONE,BASE;
+function testInfo(x,Pl){
+  let last=null,n=0,left=0;
+  for(let i=x.from;i<=x.to;i++){const l=LBY[x.c+i];if(!l)continue;n++;if(!S.done[l.id])left++;const d=S.done[l.id]||Pl.when[l.id];if(d&&(!last||d>last))last=d}
+  const need=add(x.date,-REV);
+  return{n,left,last,need,ok:!last||last<=need,days:last?diff(last,x.date):null};
+}
+const testsOk=Pl=>(S.tests||[]).every(x=>x.date<=today||testInfo(x,Pl).ok);
+function compute(){
+  let k=0;
+  for(;k<LV.length;k++){P=plan(S,today,LV[k]);if(P.finish<=S.dl&&testsOk(P))break}
+  if(k===LV.length)k=LV.length-1;
+  LVI=k;P=plan(S,today,LV[k]);B=bizPlan();DONE=doneByDate(S);
+}
+BASE=plan(defaults(),START,LV[0]);
+
+function rng(ls){
+  const a=ls.map(l=>l.i).sort((x,y)=>x-y);const out=[];let s=a[0],p=a[0];
+  for(let k=1;k<=a.length;k++){
+    if(a[k]===p+1){p=a[k];continue}
+    out.push(s===p?'L'+s:'L'+s+'–L'+p);s=a[k];p=a[k];
+  }
+  return out.join(', ');
+}
+function dayLecs(d){
+  const pl=(P.planned[d]||[]).filter(l=>!S.done[l.id]);
+  const dn=(DONE[d]||[]);
+  return{planned:pl,done:dn};
+}
+function testChip(d){
+  const T=S.tests||[];
+  return T.filter(x=>x.date===d).map(x=>`<span class="chip T">Test: ${SUB[x.c].short} <small>L${x.from}–L${x.to}</small></span>`).join('')+T.filter(x=>x.date>today&&add(x.date,-REV)===d).map(x=>`<span class="chip V">Revise ${SUB[x.c].short}</span>`).join('');
+}
+function lecChips(d){
+  const{planned,done}=dayLecs(d);let h='';
+  SUBS.forEach(s=>{
+    const dl=done.filter(l=>l.c===s.c),pl=planned.filter(l=>l.c===s.c);
+    const cd={P:'Ph',H:'Pa',M:'Mi'}[s.c];
+    if(pl.length)h+=`<span class="chip ${s.c}"><i class="f">${s.short}</i><i class="c">${cd}</i> <small>${rng(pl)}</small></span>`;
+    if(dl.length)h+=`<span class="chip ${s.c} fin"><i class="f">${s.short}</i><i class="c">${cd}</i> <small>${rng(dl)}</small></span>`;
+  });
+  return h;
+}
+function customChip(d){
+  const cu=S.custom[d]||[];if(!cu.length)return '';
+  const left=cu.filter(c=>!c.done).length;
+  return `<span class="chip C${left?'':' fin'}">${left?'✎ '+left+' task'+(left>1?'s':''):'✎ done'}</span>`;
+}
+function bizChip(d){
+  const b=B.days[d];
+  if(!b)return '';
+  if(b.n===0){return d<today?'<span class="chip R">Business skipped</span>':''}
+  const w=Math.floor(b.start/RW());
+  const lab='W'+(w+1);
+  const dbl=b.u===2?' ×2':'';
+  const T=bizTasks(d),ls=T?T.items.map(x=>x.label):[];
+  const sm=ls.length?' · '+esc(ls.slice(0,2).join(', '))+(ls.length>2?' +'+(ls.length-2):''):'';
+  const xs=S.x[d]||{},all=T&&T.items.length&&T.items.every(x=>xs[x.key]);
+  return `<span class="chip W${all?' fin':''}">Biz ${lab}${dbl}<small>${sm}</small></span>`;
+}
+let calExtra=0;
+function monthsToShow(){
+  const base=[P.finish,add(today,35),S.dl,...(S.tests||[]).map(x=>x.date)].sort().pop();
+  const out=[];let y=2026,m=9;
+  const ld=dt(base);let end=ld.getFullYear()*12+ld.getMonth()+calExtra*3;
+  const lastM=dt(B.lastDay);const cap=lastM.getFullYear()*12+lastM.getMonth();
+  end=Math.min(end,cap);
+  while(y*12+m<=end){out.push([y,m]);m++;if(m>11){m=0;y++}}
+  return{months:out,more:end<cap};
+}
+let selected=today;
+function renderCal(){
+  const wrap=document.getElementById('months');wrap.innerHTML='';
+  const rangeEnd=B.lastDay;
+  const MS=monthsToShow();
+  document.getElementById('moreM').hidden=!MS.more;
+  MS.months.forEach(([y,m])=>{
+    const sec=document.createElement('div');sec.className='month';
+    const ws=B.weeks.map((w,i)=>({w,i})).filter(x=>x.w.start&&x.w.start.slice(0,7)===`${y}-${pad(m+1)}`);
+    const wl=ws.length?`<p class="sub" style="margin:0;font-size:13px"><b style="color:var(--biz);font-weight:600">Business:</b> ${ws.map(x=>`W${x.i+1} ${ROAD[x.i].t.replace(/ \(\d+ of \d+\)/,'')} (${fmtS(x.w.start)})`).join(' · ')}</p>`:'';
+    let html=`<h2>${MON[m]} ${y}</h2>${wl}<div class="grid">`+['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>`<div class="dowh">${x}</div>`).join('');
+    const lead=(new Date(y,m,1).getDay()+6)%7;
+    const nd=new Date(y,m+1,0).getDate();
+    for(let i=0;i<lead;i++)html+='<div class="cell pad"></div>';
+    for(let d=1;d<=nd;d++){
+      const s=`${y}-${pad(m+1)}-${pad(d)}`;
+      if(s<START||s>rangeEnd){html+=`<div class="cell pad" style="opacity:.35;min-height:0;padding:7px"><span class="dn mono">${d}</span></div>`;continue}
+      const {planned,done}=dayLecs(s);
+      let lc=lecChips(s);
+      if(!lc&&s>=today&&s<=add(P.finish,0)===false){}
+      if(!lc&&s>=today&&s>P.finish&&s<=S.dl)lc='<span class="chip R">Buffer and revision</span>';
+      const b=B.days[s];
+      const lecAll=(planned.length+done.length)>0&&planned.length===0;
+      const bizAll=b&&b.n>0&&b.tick>=b.n&&s<=today;
+      const cls='cell'+(s===today?' today':'')+(s<today?' past':'')+(s===selected?' sel':'');
+      html+=`<button class="${cls}" data-d="${s}" type="button"><span class="dn">${d}</span><span class="dl">${dt(s).toLocaleDateString('en-GB',{weekday:'short'})}</span>${lc}${testChip(s)}${bizChip(s)}${customChip(s)}<span class="ck"><span class="${lecAll?'on':''}"></span><span class="${bizAll?'on b':''}"></span></span></button>`;
+    }
+    html+='</div>';sec.innerHTML=html;wrap.appendChild(sec);
+  });
+  wrap.querySelectorAll('button.cell').forEach(b=>b.onclick=()=>{selected=b.dataset.d;renderCal();renderDrawer(true)});
+}
+function lrow(l,checked,d){
+  const m=mins(S,l);
+  return `<label class="chk" style="flex:1 1 100%;padding:8px 12px"><input type="checkbox" data-l="${l.id}" ${checked?'checked':''}><div><b>${SUB[l.c].name} L${l.i}</b><span class="mono">${m} min</span></div></label>`;
+}
+function renderDrawer(scroll){
+  const dr=document.getElementById('drawer');
+  const d=selected;if(!d){dr.hidden=true;return}
+  dr.hidden=false;
+  const {planned,done}=dayLecs(d);
+  const all=[...done.map(l=>({l,ck:true})),...planned.map(l=>({l,ck:false}))];
+  let h=`<h3>${fmtL(d)}${d===today?`<span class="pill a">${real<START?'start day':'today'}</span>`:''}</h3>`;
+  (S.tests||[]).filter(x=>x.date===d).forEach(x=>{h+=`<p class="sub" style="margin:0;color:var(--patho)"><b>Class test:</b> ${esc(x.name||'Class test')} · ${SUB[x.c].name} L${x.from}–L${x.to}</p>`});
+  h+=`<div><b style="font-size:14px">Lectures</b><span class="mono" style="color:var(--muted);font-size:12.5px"> 6:00 pm–8:00 pm and 9:00 pm–11:40 pm${isSun(d)&&LVI>0?' and 1:00 pm–5:30 pm':''}</span></div>`;
+  h+=all.length?`<ul class="plain" style="gap:4px;font-size:14px">${all.map(x=>`<li${x.ck?' style="color:var(--muted);text-decoration:line-through"':''}>${SUB[x.l.c].name} L${x.l.i} <span class="mono" style="color:var(--muted);font-size:12.5px">${fmtM(mins(S,x.l))}</span></li>`).join('')}</ul>`:`<p class="sub" style="margin:0">${d>=today?'No lectures planned. Use this day for revision, MCQs and anything you missed.':'No lectures were recorded on this day.'}</p>`;
+  const b=B.days[d];
+  h+=`<div><b style="font-size:14px">Business</b><span class="mono" style="color:var(--muted);font-size:12.5px"> ${isSun(d)?'5:00 am–8:00 am and 10:00 am–1:00 pm':'5:00 am–7:00 am'}</span></div>`;
+  if(b&&(b.n>0||d<=today)){
+    const w=Math.min(Math.floor(b.start/RW()),NW-1),r=ROAD[w];
+    h+=`<p class="sub" style="margin:0;font-size:14px"><b style="color:var(--fg)">Week ${w+1}, ${r.t}</b> · Phase ${r.ph.n} · income target ${r.inc}${d<=today?` · ${b.tick} of ${b.u} session${b.u>1?'s':''} done`:''}</p>`;
+    {const T=bizTasks(d);if(T){const xs=S.x[d]||{};h+=`<ul class="plain" style="gap:4px;font-size:14px">${[...T.items,...T.habits].map(x=>`<li${xs[x.key]?' style="color:var(--muted);text-decoration:line-through"':''}>${esc(x.label)}${x.text&&x.text!=='Do this every session'?': '+esc(x.text):''}</li>`).join('')}</ul>`}}
+  }else h+='<p class="sub" style="margin:0">The roadmap is complete by this date.</p>';
+  h+=`<div class="acts"><button class="btn" id="openDay" type="button">Open this day in Daily tasks to tick things off</button></div>`;
+  dr.innerHTML=h;
+  document.getElementById('openDay').onclick=()=>{dayView=d;renderDay();document.querySelector('.tabs button[data-t=day]').click();window.scrollTo({top:0})};
+  if(scroll)dr.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function renderProgress(){
+  const tot={P:0,H:0,M:0},dn={P:0,H:0,M:0};let n=0;
+  LECT.forEach(l=>{const m=mins(S,l);tot[l.c]+=m;if(S.done[l.id]){dn[l.c]+=m;n++}});
+  const T=tot.P+tot.H+tot.M,D=dn.P+dn.H+dn.M;
+  document.getElementById('pTxt').textContent=`${Math.round(D/T*100)}% of lectures done (${n} of ${LECT.length})`;
+  document.getElementById('pHrs').textContent=`${(D/60).toFixed(0)} / ${(T/60).toFixed(0)} h`;
+  document.getElementById('pBar').innerHTML=SUBS.map(s=>`<i style="width:${dn[s.c]/T*100}%;background:${s.col}"></i>`).join('');
+  document.getElementById('pLeg').innerHTML=SUBS.map(s=>`<span><i class="dot" style="background:${s.col}"></i>${s.name} <span class="mono">${Math.round(dn[s.c]/tot[s.c]*100)}%</span></span>`).join('');
+  const dd=diff(P.finish,S.dl);
+  const st=n===LECT.length?'<b>All lectures done</b>':`Lectures finish <b>${fmtS(P.finish)}</b> `+(dd>0?`<span class="ahead">${dd} day${dd>1?'s':''} before your deadline</span>`:dd<0?`<span class="behind">${-dd} day${-dd>1?'s':''} after your deadline</span>`:'<span>on your deadline</span>');
+  const curW=B.weeks.findIndex(w=>w.done<w.n-1e-6);const bh=B.weeks.reduce((a,w)=>a+w.done,0);
+  document.getElementById('dlIn').value=S.dl;
+  const miss=(S.tests||[]).filter(x=>x.date>today&&!testInfo(x,P).ok);
+  const tm=miss.length?`<span class="behind">${miss.length} class test${miss.length>1?'s':''} cannot be fully covered in time</span>`:'';
+  const remH=LECT.reduce((a,l)=>a+(S.done[l.id]?0:mins(S,l)),0)/60;
+  const late=diff(S.dl,P.finish);
+  const fit=n===LECT.length?'':(late>0?`<span class="behind">Deadline ${fmtS(S.dl)}: still ${late} day${late>1?'s':''} late at maximum load. Move the deadline or cut something.</span>`:LVI===0?`<span class="ahead">Deadline ${fmtS(S.dl)}: on track with your normal routine</span>`:`<span class="behind">Deadline ${fmtS(S.dl)}: needs extra study (${LV[LVI].name})</span>`);
+  document.getElementById('pStats').innerHTML=`<span>${st}</span>${fit?`<span>${fit}</span>`:''}${tm}<span>${remH.toFixed(0)} h of lectures left</span><span>Business: now <b>${curW<0?'complete':'week '+(curW+1)+' of '+NW}</b> · $60K goal <b>${fmtS(B.weeks[NW-1].end)} ${dt(B.weeks[NW-1].end).getFullYear()}</b></span>`;
+}
+let openPh=null;
+function renderBiz(){
+  const rw=RW();
+  const curW=B.weeks.findIndex(w=>w.done<w.n-1e-6);
+  const cw=curW<0?NW-1:curW;
+  if(openPh===null)openPh=new Set([ROAD[cw].ph.n]);
+  const first=START,last=B.lastDay,span=diff(first,last)+1;
+  const pc=d=>diff(first,d)/span*100;
+  // summary
+  const w10=B.weeks[9],w56=B.weeks[NW-1];
+  const hd=B.weeks.reduce((a,w)=>a+w.done,0);
+  document.getElementById('bsum').innerHTML=
+   `<div><span>Now</span><b>${curW<0?'Complete':'Week '+(curW+1)+' of '+NW}</b></div>
+    <div><span>First client (week 10)</span><b>${fmtS(w10.start)} ${dt(w10.start).getFullYear()}</b></div>
+    <div><span>$60K a month (week 56)</span><b>${fmtS(w56.end)} ${dt(w56.end).getFullYear()}</b></div>
+    <div><span>Hours logged</span><b>${hd.toFixed(0)} of ${NW*rw}</b></div>`;
+  // phase gantt
+  let ax='';
+  for(let y=2026,m=9;;){const s=`${y}-${pad(m+1)}-01`;if(s>last)break;if(s>first&&m%3===0)ax+=`<span style="left:${pc(s)}%">${MON[m].slice(0,3)}${m===0?' '+y:''}</span>`;m++;if(m>11){m=0;y++}}
+  let g=`<div class="axis" style="margin-left:62px"><span style="left:0">${fmtS(first)} 2026</span>${ax}</div>`;
+  PH.forEach(p=>{
+    const ws=B.weeks.slice(p.w[0]-1,p.w[1]),s=ws[0].start,e=ws[ws.length-1].end;
+    const dn=ws.reduce((a,w)=>a+w.done,0),tt=ws.length*rw;
+    const cls=dn>=tt-1e-6?'dn':(dn>0?'cur':'');
+    g+=`<div class="gr" style="grid-template-columns:54px 1fr"><span class="lb">Phase ${p.n}</span><div class="tk" style="height:24px"><i class="${cls}" style="top:3px;height:18px;left:${pc(s)}%;width:${Math.max((diff(s,e)+1)/span*100,1)}%;--p:${dn/tt*100}%"></i><u style="left:${pc(today)}%"></u></div></div>`;
+  });
+  document.getElementById('gantt').innerHTML=g;
+  // phases with weeks
+  document.getElementById('weeks').innerHTML=PH.map(p=>{
+    const ws=B.weeks.slice(p.w[0]-1,p.w[1]);
+    const dn=ws.reduce((a,w)=>a+w.done,0),tt=ws.length*rw;
+    const st=dn>=tt-1e-6?'<span class="pill g">done</span>':(cw>=p.w[0]-1&&cw<=p.w[1]-1&&curW>=0?'<span class="pill a">now</span>':'');
+    const rows=ws.map((w,k)=>{
+      const i=p.w[0]-1+k,r=ROAD[i],cur=i===curW;
+      const ps=w.done>=w.n-1e-6?'<span class="pill g">done</span>':cur?'<span class="pill a">now</span>':'';
+      return `<div class="wk${cur?' cur':''}"><div><div class="tag">Week ${i+1}</div>${ps}</div><div><h4>${r.t}</h4><p>${r.a}</p><p><b style="color:var(--fg);font-weight:500">Done when:</b> ${r.d}</p><div class="mt">${w.start?fmtS(w.start)+' – '+fmtS(w.end):'—'} · ${w.done.toFixed(0)}/${w.n} h · income target ${r.inc}</div>${resHTML(i+1,cur)}</div></div>`;
+    }).join('');
+    return `<details class="ph" data-p="${p.n}" ${openPh.has(p.n)?'open':''}><summary><span><b>Phase ${p.n}: ${p.name}</b>${st}</span><span class="mono">Weeks ${p.w[0]}–${p.w[1]} · ${fmtS(ws[0].start)} ${dt(ws[0].start).getFullYear()} to ${fmtS(ws[ws.length-1].end)} ${dt(ws[ws.length-1].end).getFullYear()} · ${p.inc}</span></summary><div class="cp"><b>Checkpoint:</b> ${p.cp}</div>${rows}</details>`;
+  }).join('');
+  document.querySelectorAll('#weeks details').forEach(d=>d.ontoggle=()=>{const n=+d.dataset.p;if(d.open)openPh.add(n);else openPh.delete(n)});
+  document.getElementById('rwIn').value=rw;
+}
+let dayView=today;
+const dow=s=>dt(s).toLocaleDateString('en-GB',{weekday:'long'});
+function renderDay(){
+  const d=dayView;
+  document.getElementById('dkick').textContent=d===today?(real<START?'Starts tomorrow':'Today'):(d<today?'Past day':'Upcoming day');
+  document.getElementById('dtitle').textContent=fmtL(d)+' '+dt(d).getFullYear();
+  document.getElementById('dPick').value=d;
+  const {planned,done}=dayLecs(d);
+  const lecs=[...done.map(l=>({l,ck:true})),...planned.map(l=>({l,ck:false}))];
+  const sun=isSun(d);
+  const tasks=[];
+  const body=[];
+  const blk=(time,title,rows,note)=>`<div class="blk"><div class="bh"><span class="mono">${time}</span><b>${title}</b></div>${note?`<p class="sub" style="margin:0 0 8px;font-size:13px">${note}</p>`:''}<div class="row">${rows.join('')}</div></div>`;
+  const row=(ck,attr,title,sub,dis)=>`<label class="chk${dis?' dis':''}" style="flex:1 1 100%"><input type="checkbox" ${attr} ${ck?'checked':''} ${dis?'disabled':''}><div><b>${title}</b><span>${sub||''}</span></div></label>`;
+  (S.tests||[]).filter(x=>x.date===d||(x.date>today&&add(x.date,-REV)===d)).forEach(x=>{const td=x.date===d;body.push(`<div class="blk info"><div class="bh"><span class="mono">${td?'Test day':'Revision day'}</span><b>${esc(x.name||'Class test')}: ${SUB[x.c].name} L${x.from}–L${x.to}</b></div><p class="sub" style="margin:0;font-size:13px">${td?'Light review before the test. Sleep on time.':'Keep this day for recall questions on the syllabus, not new lectures from this subject.'}</p></div>`)});
+  // business
+  const bz=B.days[d];
+  if(bz&&(bz.n>0||d<=today)){
+    const w=Math.min(Math.floor(bz.start/RW()),NW-1),r=ROAD[w];
+    const rows=[];
+    for(let k=0;k<bz.u;k++){
+      const ck=k<bz.tick;tasks.push({ck,h:0});
+      rows.push(row(ck,`data-b="${k}"`,`Business session${bz.u===2?' '+(k+1)+' of 2':''}: Week ${w+1}, ${r.t}`,r.a+` <span class="mono" style="font-size:12px">(Phase ${r.ph.n} · income target ${r.inc})</span>`,d>today));
+    }
+    {const T=bizTasks(d),xs0=S.x[d]||{};
+     if(T){const tr=[...T.items,...T.habits].map(x=>{const ck=!!xs0[x.key];tasks.push({ck,h:0});return row(ck,`data-x="${x.key}"`,x.label,x.text,d>today)});rows.unshift(...tr)}}
+    let bb=blk(sun?'5:00 am–8:00 am and 10:00 am–1:00 pm':'5:00 am–7:00 am','Business',rows,d>today?'Tick these on the day itself.':'Tick each task when it is done, then tick the session box for the time.');
+    bb=bb.replace(/<\/div>$/,resHTML(w+1,true)+'</div>');body.push(bb);
+  }
+  if(!sun)body.push(`<div class="blk info"><div class="bh"><span class="mono">8:00 am–5:30 pm</span><b>College</b></div><p class="sub" style="margin:0;font-size:13px">Optional in a free period: a few ad breakdowns or 10 minutes of flashcards.</p></div>`);
+  else body.push(LVI>0?`<div class="blk info"><div class="bh"><span class="mono">1:00 pm–5:30 pm</span><b>Study block (needed for the deadline)</b></div><p class="sub" style="margin:0;font-size:13px">Lectures are scheduled here as block 3. Take a proper break first.</p></div>`:`<div class="blk info"><div class="bh"><span class="mono">1:00 pm–5:30 pm</span><b>Rest and catch-up</b></div><p class="sub" style="margin:0;font-size:13px">Use this for lectures or business work you missed this week.</p></div>`);
+  // lectures split into two blocks by minutes
+  const b1=[],b2=[],b3=[];let acc=0;
+  lecs.forEach(x=>{const m=mins(S,x.l);(acc<120?b1:acc<280?b2:b3).push(x);acc+=m;tasks.push({ck:x.ck,h:m/60})});
+  const lrows=a=>a.map(x=>row(x.ck,`data-l="${x.l.id}"`,`${SUB[x.l.c].name} L${x.l.i}`,`<span class="mono">${fmtM(mins(S,x.l))}</span>`));
+  const sum=a=>a.reduce((t,x)=>t+mins(S,x.l),0);
+  if(lecs.length){
+    body.push(blk('6:00 pm–8:00 pm','Lectures, block 1',b1.length?lrows(b1):['<p class="sub" style="margin:0">Nothing planned in this block.</p>'],d>today?'Tick a lecture early and it counts as done today.':''));
+    body.push(blk('9:00 pm–11:40 pm','Lectures, block 2',b2.length?lrows(b2):['<p class="sub" style="margin:0">Nothing planned in this block.</p>']));
+    if(b3.length)body.push(blk(sun?'1:00 pm–5:30 pm':'Overflow',sun?'Lectures, block 3 (Sunday catch-up)':'Lectures, overflow',lrows(b3),sun?'Added because the deadline needs it.':'Do these in a free period at college. Anything unticked moves to the next day automatically.'));
+  }else body.push(`<div class="blk info"><div class="bh"><span class="mono">6:00 pm–12:00 am</span><b>No new lectures</b></div><p class="sub" style="margin:0;font-size:13px">${d>=today?'Use the evening for revision, MCQs and anything you missed.':'No lectures were recorded on this day.'}</p></div>`);
+  // recall
+  const xs=S.x[d]||{};
+  tasks.push({ck:!!xs.recall,h:0});
+  body.push(blk('11:40 pm–12:00 am','Recall',[row(!!xs.recall,'data-x="recall"','Write the day\'s key points from memory and do 15 to 20 MCQs','Close the notes first.')]));
+  // custom
+  const cu=S.custom[d]||[];
+  cu.forEach(c=>tasks.push({ck:!!c.done,h:0}));
+  body.push(`<div class="blk"><div class="bh"><b>Your own tasks</b></div><div class="row">${cu.map((c,i)=>`<div class="chk" style="flex:1 1 100%;align-items:center"><input type="checkbox" data-c="${i}" aria-label="Done" ${c.done?'checked':''}><div style="flex:1;min-width:0"><b style="font-weight:500;${c.done?'text-decoration:line-through;color:var(--muted)':''}">${c.t.replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))}</b></div><button class="btn" type="button" data-cd="${i}" aria-label="Remove task">Remove</button></div>`).join('')}</div><form id="cForm" class="acts" style="margin-top:8px"><input id="cNew" type="text" placeholder="Add a task for this day" maxlength="120" style="flex:1 1 220px;min-width:0;font:400 14px var(--body);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px 10px" aria-label="New task"><button class="btn" type="submit">Add</button></form></div>`);
+  document.getElementById('dBody').innerHTML=body.join('');
+  const nDone=tasks.filter(t=>t.ck).length;
+  document.getElementById('dProg').textContent=`${nDone} of ${tasks.length} tasks done`;
+  document.getElementById('dProgH').textContent=lecs.length?`${(sum(lecs)/60).toFixed(1)} h of lectures`:'';
+  {const tt={P:0,H:0,M:0},dd={P:0,H:0,M:0};LECT.forEach(l=>{tt[l.c]++;if(S.done[l.id])dd[l.c]++});const tot=dd.P+dd.H+dd.M;
+    document.getElementById('dLec').innerHTML=`<span>Lectures completed in total: <b>${tot} of ${LECT.length}</b></span>`+SUBS.map(s=>`<span><i class="dot" style="background:${s.col}"></i>${s.short} <b>${dd[s.c]}/${tt[s.c]}</b></span>`).join('')}
+  document.getElementById('dBar').innerHTML=`<i style="width:${tasks.length?nDone/tasks.length*100:0}%;background:var(--micro)"></i>`;
+  const bd=document.getElementById('dBody');
+  bd.querySelectorAll('input[data-l]').forEach(i=>i.onchange=()=>{const id=i.dataset.l;if(i.checked)S.done[id]=d<=today?d:today;else delete S.done[id];save();refresh()});
+  bd.querySelectorAll('input[data-b]').forEach(i=>i.onchange=()=>{const cur=Math.min(S.biz[d]||0,units(d)),k=+i.dataset.b;S.biz[d]=i.checked?Math.max(cur,k+1):Math.min(cur,k);if(S.biz[d]<=0)delete S.biz[d];save();refresh()});
+  bd.querySelectorAll('input[data-x]').forEach(i=>i.onchange=()=>{(S.x[d]=S.x[d]||{})[i.dataset.x]=i.checked;save();refresh()});
+  bd.querySelectorAll('input[data-c]').forEach(i=>i.onchange=()=>{S.custom[d][+i.dataset.c].done=i.checked;save();refresh()});
+  bd.querySelectorAll('button[data-cd]').forEach(b=>b.onclick=()=>{S.custom[d].splice(+b.dataset.cd,1);if(!S.custom[d].length)delete S.custom[d];save();refresh()});
+  document.getElementById('cForm').onsubmit=e=>{e.preventDefault();const v=document.getElementById('cNew').value.trim();if(!v)return;(S.custom[d]=S.custom[d]||[]).push({t:v,done:false});save();refresh()};
+}
+const fmtM=m=>{const h=Math.floor(m/60),r=m%60;return h?`${h} hr ${pad(r)} min`:`${r} min`};
+function renderTests(){
+  const T=(S.tests||[]).slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  document.getElementById('tSum').textContent=T.length?`· ${T.length} added`:'· none added yet';
+  document.getElementById('tList').innerHTML=T.map(x=>{
+    const f=SUB[x.c];
+    const head=`<b>${esc(x.name||'Class test')}</b> · ${f.name} L${x.from}–L${x.to} · ${fmtS(x.date)} ${dt(x.date).getFullYear()}`;
+    let msg='';
+    if(x.date<=today)msg='<span class="mono" style="color:var(--muted)">past</span>';
+    else{const i=testInfo(x,P);
+      msg=i.left===0?`<span class="ok">All ${i.n} lectures done</span>`:i.ok?`<span class="ok">On track: syllabus finished ${fmtS(i.last)}, ${i.days} day${i.days===1?'':'s'} before the test</span>`:`<span class="bad">Not enough time: the last syllabus lecture lands on ${fmtS(i.last)}, after the revision day (${fmtS(i.need)}). Move the test date, shorten the syllabus or raise study hours.</span>`}
+    return `<div class="titem"><div style="min-width:0"><div>${head}</div><div style="font-size:13px">${msg}</div></div><button class="btn" type="button" data-td="${x.id}">Remove</button></div>`;
+  }).join('');
+  document.querySelectorAll('#tList button[data-td]').forEach(b=>b.onclick=()=>{S.tests=S.tests.filter(x=>x.id!==b.dataset.td);save();refresh()});
+}
+function refresh(){compute();renderDay();renderProgress();renderCal();renderDrawer(false);renderBiz();renderTests()}
+document.getElementById('tForm').onsubmit=e=>{
+  e.preventDefault();
+  const c=document.getElementById('tIn_c').value,a=Math.round(+document.getElementById('tIn_f').value),b=Math.round(+document.getElementById('tIn_t').value),date=document.getElementById('tIn_d').value,name=document.getElementById('tIn_n').value.trim().slice(0,40);
+  const n=SUB[c].n,err=document.getElementById('tErr');
+  if(!date||!(a>=1)||!(b>=a)||b>n){err.textContent=`Enter a test date and a lecture range between 1 and ${n} (the first number cannot be larger than the second).`;return}
+  if(date<=today){err.textContent='The test date must be after today.';return}
+  err.textContent='';
+  (S.tests=S.tests||[]).push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name,c,from:a,to:b,date});
+  save();e.target.reset();refresh();
+};
+document.getElementById('tIn_c').onchange=e=>{const n=SUB[e.target.value].n;document.getElementById('tIn_f').max=n;document.getElementById('tIn_t').max=n};
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('.panel').forEach(p=>p.hidden=p.id!=='p-'+b.dataset.t);
+});
+const go=s=>{if(s<START)s=START;dayView=s;renderDay()};
+document.getElementById('dPrev').onclick=()=>go(add(dayView,-1));
+document.getElementById('dNext').onclick=()=>go(add(dayView,1));
+document.getElementById('dToday').onclick=()=>go(today);
+document.getElementById('dPick').onchange=e=>{if(e.target.value)go(e.target.value)};
+document.getElementById('moreM').onclick=()=>{calExtra++;renderCal()};
+document.getElementById('rwIn').onchange=e=>{const v=Math.max(5,Math.min(80,+e.target.value||36));S.rw=v;save();refresh()};
+document.getElementById('dlIn').onchange=e=>{if(e.target.value){S.dl=e.target.value;save();refresh()}};
+document.getElementById('toToday').onclick=()=>{selected=today;renderCal();renderDrawer(true)};
+document.getElementById('themeBtn').onclick=()=>{
+  const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+  r.dataset.theme=dark?'light':'dark';
+};
+refresh();
+
+
+/* ===== Block alarms ===== */
+(function(){
+  const BL=[
+    {id:'biz1',m:300,days:[0,1,2,3,4,5,6],name:'Business session (wake up)'},
+    {id:'col',m:480,days:[1,2,3,4,5,6],name:'College'},
+    {id:'biz2',m:600,days:[0],name:'Business session 2 (Sunday)'},
+    {id:'sun',m:780,days:[0],name:'Sunday study or rest block'},
+    {id:'lec1',m:1080,days:[0,1,2,3,4,5,6],name:'Lectures, block 1'},
+    {id:'din',m:1200,days:[0,1,2,3,4,5,6],name:'Dinner'},
+    {id:'lec2',m:1260,days:[0,1,2,3,4,5,6],name:'Lectures, block 2'},
+    {id:'rec',m:1420,days:[0,1,2,3,4,5,6],name:'Recall and MCQs'},
+    {id:'slp',m:1440,days:[0,1,2,3,4,5,6],name:'Sleep'}
+  ];
+  const DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const KEY='planner-alarm-v1';
+  let A={on:false,lead:5,off:{},fired:{}};
+  try{const r=JSON.parse(localStorage.getItem(KEY)||'null');if(r)A=Object.assign(A,r)}catch(e){}
+  const sv=()=>{try{localStorage.setItem(KEY,JSON.stringify(A))}catch(e){}};
+  const $=id=>document.getElementById(id);
+  const hm=m=>{const h=Math.floor(m/60)%24,mm=m%60,ap=h>=12?'pm':'am';return ((h%12)||12)+':'+String(mm).padStart(2,'0')+' '+ap};
+  const startOf=(day,b)=>new Date(day.getFullYear(),day.getMonth(),day.getDate(),0,b.m,0,0);
+  let ctx=null;
+  function beep(){
+    try{
+      ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+      if(ctx.state==='suspended')ctx.resume();
+      const t0=ctx.currentTime;
+      for(let k=0;k<6;k++){
+        const o=ctx.createOscillator(),g=ctx.createGain();
+        o.type='sine';o.frequency.value=k%2?880:660;
+        o.connect(g);g.connect(ctx.destination);
+        const t=t0+k*.28;
+        g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.35,t+.03);g.gain.exponentialRampToValueAtTime(.001,t+.25);
+        o.start(t);o.stop(t+.27);
+      }
+    }catch(e){}
+  }
+  let flash=null,baseTitle=document.title;
+  function banner(title,sub){
+    $('abT').textContent=title;$('abS').textContent=sub;$('alarmBanner').classList.add('show');
+    clearInterval(flash);let on=false;
+    flash=setInterval(()=>{on=!on;document.title=on?'⏰ '+title:baseTitle},900);
+  }
+  $('abX').onclick=()=>{$('alarmBanner').classList.remove('show');clearInterval(flash);document.title=baseTitle};
+  function ring(b,when,test){
+    const lead=Math.max(1,+A.lead||5);
+    const title=test?'Test alarm':b.name+' starts in '+(test?lead:Math.max(1,Math.round((when-new Date())/60000)))+' min';
+    const sub=test?'This is how an alarm will look and sound.':'Starts at '+hm(b.m)+'. Wrap up what you are doing.';
+    banner(title,sub);beep();setTimeout(beep,3200);
+    try{navigator.vibrate&&navigator.vibrate([300,150,300,150,300])}catch(e){}
+    try{if('Notification' in window&&Notification.permission==='granted')new Notification(title,{body:sub,tag:'planner-'+b.id,requireInteraction:false})}catch(e){}
+  }
+  function upcoming(){
+    const now=new Date(),out=[];
+    for(let d=0;d<3;d++){
+      const day=new Date(now.getFullYear(),now.getMonth(),now.getDate()+d);
+      BL.forEach(b=>{
+        if(!b.days.includes(day.getDay())||A.off[b.id])return;
+        const st=startOf(day,b),tr=new Date(st-(Math.max(1,+A.lead||5))*60000);
+        if(st>now)out.push({b,st,tr,key:ymd(day)+b.id});
+      });
+    }
+    return out.sort((x,y)=>x.st-y.st);
+  }
+  function tick(){
+    if(!A.on)return;
+    const now=new Date();
+    upcoming().forEach(u=>{
+      if(now>=u.tr&&now<u.st&&!A.fired[u.key]){
+        A.fired[u.key]=1;
+        const ks=Object.keys(A.fired);if(ks.length>60)ks.slice(0,ks.length-40).forEach(k=>delete A.fired[k]);
+        sv();ring(u.b,u.st,false);
+      }
+    });
+    paintNext();
+  }
+  function paintNext(){
+    const st=$('aStatus'),nx=$('aNext');
+    st.textContent=A.on?'Alarms are on':'Alarms are off';
+    $('aOnLbl').textContent=A.on?'On':'Off';
+    if(!A.on){nx.textContent='Switch them on to hear a chime and see a pop-up before each block.';return}
+    const u=upcoming()[0];
+    if(!u){nx.textContent='No blocks selected.';return}
+    const mins=Math.max(0,Math.round((u.tr-new Date())/60000));
+    const when=mins>=60?Math.floor(mins/60)+' h '+(mins%60)+' min':mins+' min';
+    nx.textContent='Next: '+u.b.name+' at '+hm(u.b.m)+' (alarm at '+hm(u.b.m-(+A.lead||5))+', in '+when+')';
+    document.querySelectorAll('#aList .arow').forEach(r=>r.classList.toggle('nx',r.dataset.b===u.b.id));
+  }
+  function paintList(){
+    $('aList').innerHTML=BL.map(b=>{
+      const ds=b.days.length===7?'Every day':b.days.length===1?DN[b.days[0]]+' only':'Mon to Sat';
+      return '<div class="arow" data-b="'+b.id+'"><input type="checkbox" data-a="'+b.id+'" aria-label="Alarm for '+b.name+'" '+(A.off[b.id]?'':'checked')+'><span class="tm">'+hm(b.m)+'</span><div><b>'+b.name+'</b><div class="ds">'+ds+'</div></div><span class="ds mono">'+hm(b.m-(+A.lead||5))+'</span></div>';
+    }).join('');
+    $('aList').querySelectorAll('input[data-a]').forEach(i=>i.onchange=()=>{if(i.checked)delete A.off[i.dataset.a];else A.off[i.dataset.a]=1;sv();paintNext()});
+  }
+  function perm(){
+    const p=$('aPerm');
+    if(!('Notification' in window)){p.hidden=true;return}
+    p.textContent=Notification.permission==='granted'?'Notifications allowed':Notification.permission==='denied'?'Notifications blocked in browser':'Allow notifications';
+    p.disabled=Notification.permission!=='default';
+  }
+  $('aOn').checked=A.on;$('aLead').value=A.lead;
+  $('aOn').onchange=e=>{
+    A.on=e.target.checked;sv();
+    if(A.on){
+      try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();ctx.resume()}catch(_){}
+      if('Notification' in window&&Notification.permission==='default')Notification.requestPermission().then(perm);
+    }
+    paintNext();
+  };
+  $('aLead').onchange=e=>{A.lead=Math.max(1,Math.min(60,Math.round(+e.target.value||5)));e.target.value=A.lead;A.fired={};sv();paintList();paintNext()};
+  $('aTest').onclick=()=>ring({id:'test',name:'Test alarm',m:0},new Date(),true);
+  $('aPerm').onclick=()=>Notification.requestPermission().then(perm);
+  paintList();perm();paintNext();
+  setInterval(tick,10000);tick();
+})();
+</script>
+ <script>
+(function(){
+const $=id=>document.getElementById(id),KK='planner-ai-key';let files=[],snap=null;
+const AIK=()=>{try{return localStorage.getItem(KK)||''}catch(e){return ''}};
+$('aiKey').value=AIK();$('aiKey').onchange=e=>{try{localStorage.setItem(KK,e.target.value.trim())}catch(_){}};
+$('aiPick').onclick=()=>$('aiFile').click();
+$('aiFile').onchange=e=>{files=files.concat([...e.target.files]);e.target.value='';paintF()};
+function paintF(){$('aiFiles').textContent=files.length?'Attached: '+files.map(f=>f.name).join(', ')+'  (click here to clear)':'';$('aiFiles').style.cursor='pointer'}
+$('aiFiles').onclick=()=>{files=[];paintF()};
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SR)$('aiMic').hidden=true;else $('aiMic').onclick=()=>{const r=new SR();r.lang='en-US';r.onresult=e=>{$('aiTxt').value+=(($('aiTxt').value?' ':'')+e.results[0][0].transcript)};r.start()};
+const b64=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result.split(',')[1]);f.readAsDataURL(blob)});
+function toJpeg(src,w,h){const m=1600,k=Math.min(1,m/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c.toDataURL('image/jpeg',.8).split(',')[1]}
+const jpg=d=>({type:'image',source:{type:'base64',media_type:'image/jpeg',data:d}});
+async function fileBlocks(f){
+  const u=URL.createObjectURL(f);
+  try{
+    if(f.type==='application/pdf'){if(f.size>20e6)throw new Error(f.name+' is over 20 MB');return[{type:'document',source:{type:'base64',media_type:'application/pdf',data:await b64(f)}}]}
+    if(f.type.startsWith('image/')){const i=new Image();i.src=u;await i.decode();return[jpg(toJpeg(i,i.naturalWidth,i.naturalHeight))]}
+    if(f.type.startsWith('video/')){
+      const v=document.createElement('video');v.muted=true;v.preload='auto';v.src=u;await new Promise((ok,no)=>{v.onloadeddata=ok;v.onerror=()=>no(new Error('Cannot read '+f.name))});
+      const n=8,out=[];for(let k=0;k<n;k++){v.currentTime=(v.duration||1)*(k+.5)/n;await new Promise(r=>v.onseeked=r);out.push(jpg(toJpeg(v,v.videoWidth,v.videoHeight)))}return out}
+    throw new Error('Unsupported file: '+f.name);
+  }finally{URL.revokeObjectURL(u)}
+}
+function sys(){
+  const T=(S.tests||[]).map(t=>`${t.name||'Test'} ${t.c} L${t.from}-${t.to} ${t.date}`).join('; ')||'none';
+  return `You edit a medical student's study planner. Today is ${today}. Subjects: P=Pharmacology (L1-83), H=Pathology (L1-77), M=Microbiology (L1-52). Current lecture deadline ${S.dl}; business hours per roadmap week ${RW()}; tests: ${T}.
+Read the user's message and any attached images/PDF/video frames, then reply with ONLY JSON (no markdown): {"reply":"one short sentence","actions":[...]}. Allowed actions:
+{"type":"addTest","name":"","c":"P|H|M","from":1,"to":20,"date":"YYYY-MM-DD"}
+{"type":"removeTest","name":"substring of test name"}
+{"type":"setDeadline","date":"YYYY-MM-DD"}
+{"type":"setBizHours","hours":36}
+{"type":"addTask","date":"YYYY-MM-DD","text":""}
+{"type":"markDone","c":"P|H|M","from":1,"to":5,"date":"YYYY-MM-DD"}
+{"type":"unmarkDone","c":"P|H|M","from":1,"to":5}
+{"type":"setLectureMinutes","c":"P|H|M","lecture":12,"minutes":60}
+Use only dates after today for tests and deadlines. Anything you cannot map (a timetable change, a holiday) becomes addTask on that date. If nothing in the input is actionable, return an empty actions list and say why.`;
+}
+async function askAI(txt){
+  const content=[];for(const f of files)content.push(...await fileBlocks(f));
+  content.push({type:'text',text:txt||'Read the attached file(s) and update my planner.'});
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':AIK(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,system:sys(),messages:[{role:'user',content}]})});
+  const j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||'API error '+r.status);
+  const m=(j.content||[]).map(c=>c.text||'').join('').match(/\{[\s\S]*\}/);if(!m)throw new Error('No usable answer');return JSON.parse(m[0]);
+}
+function local(t){
+  const q=t.toLowerCase(),A=[],dm=q.match(/\d{4}-\d{2}-\d{2}/),D=dm?dm[0]:q.includes('tomorrow')?add(today,1):today;
+  const c=/pharm/.test(q)?'P':/path/.test(q)?'H':/micro/.test(q)?'M':null,rr=q.match(/l?(\d+)\s*(?:to|-|–)\s*l?(\d+)/);
+  if(/deadline|finish all lectures/.test(q)&&dm)A.push({type:'setDeadline',date:dm[0]});
+  else if(/done|finished|completed/.test(q)&&c&&rr)A.push({type:'markDone',c,from:+rr[1],to:+rr[2],date:today});
+  else if(/^add task[:\s]/.test(q))A.push({type:'addTask',date:D,text:t.replace(/^add task[:\s]*/i,'').replace(/\d{4}-\d{2}-\d{2}|\btomorrow\b|\btoday\b/gi,'').trim()});
+  return{reply:A.length?'Understood.':'I could not read that without an API key. Add one under AI settings, or use a simpler command.',actions:A};
+}
+const rng=(a,b)=>{const r=[];for(let i=a;i<=b;i++)r.push(i);return r};
+const ok=(c,a,b)=>SUB[c]&&a>=1&&b>=a&&b<=SUB[c].n;
+function describe(a){switch(a.type){
+  case'addTest':return ok(a.c,a.from,a.to)&&a.date>today?`Add test "${a.name||'Class test'}": ${SUB[a.c].name} L${a.from}–L${a.to} on ${a.date}`:null;
+  case'removeTest':return(S.tests||[]).some(t=>(t.name||'').toLowerCase().includes((a.name||'').toLowerCase()))&&a.name?`Remove test matching "${a.name}"`:null;
+  case'setDeadline':return a.date>today?`Finish all lectures by ${a.date}`:null;
+  case'setBizHours':return a.hours>=5&&a.hours<=80?`Business hours per roadmap week: ${a.hours}`:null;
+  case'addTask':return a.date&&a.text?`Add task on ${a.date}: ${a.text}`:null;
+  case'markDone':return ok(a.c,a.from,a.to)?`Mark ${SUB[a.c].name} L${a.from}–L${a.to} done${a.date?' on '+a.date:''}`:null;
+  case'unmarkDone':return ok(a.c,a.from,a.to)?`Mark ${SUB[a.c].name} L${a.from}–L${a.to} not done`:null;
+  case'setLectureMinutes':return SUB[a.c]&&a.lecture>=1&&a.lecture<=SUB[a.c].n&&a.minutes>0?`${SUB[a.c].name} L${a.lecture} takes ${a.minutes} min`:null}return null}
+function apply(a){switch(a.type){
+  case'addTest':(S.tests=S.tests||[]).push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:String(a.name||'').slice(0,40),c:a.c,from:a.from,to:a.to,date:a.date});break;
+  case'removeTest':S.tests=S.tests.filter(t=>!(t.name||'').toLowerCase().includes(a.name.toLowerCase()));break;
+  case'setDeadline':S.dl=a.date;break;
+  case'setBizHours':S.rw=a.hours;break;
+  case'addTask':(S.custom[a.date]=S.custom[a.date]||[]).push({t:String(a.text).slice(0,120),done:false});break;
+  case'markDone':rng(a.from,a.to).forEach(i=>S.done[a.c+i]=(a.date&&a.date<=today)?a.date:today);break;
+  case'unmarkDone':rng(a.from,a.to).forEach(i=>delete S.done[a.c+i]);break;
+  case'setLectureMinutes':S.mins[a.c+a.lecture]=a.minutes}}
+function show(res){
+  const box=$('aiOut'),L=(res.actions||[]).map(a=>[a,describe(a)]).filter(x=>x[1]);box.hidden=false;
+  box.innerHTML=`<h3>${esc(res.reply||'Proposed changes')}</h3>`+(L.length?L.map(x=>`<div class="slot"><time>change</time><p>${esc(x[1])}</p></div>`).join('')+'<div class="acts" style="padding:12px 14px"><button class="btn" id="aiApply" type="button">Apply these changes</button><button class="btn" id="aiNo" type="button">Discard</button></div>':'<div class="slot"><time>none</time><p>No valid changes found.</p></div>');
+  if(L.length){$('aiNo').onclick=()=>box.hidden=true;$('aiApply').onclick=()=>{snap=JSON.stringify(S);L.forEach(x=>apply(x[0]));save();refresh();box.innerHTML='<h3>Applied '+L.length+' change'+(L.length>1?'s':'')+'. Check the Calendar tab.</h3>';$('aiUndo').disabled=false;files=[];paintF();$('aiTxt').value=''}}
+}
+$('aiUndo').onclick=()=>{if(!snap)return;S=JSON.parse(snap);snap=null;save();refresh();$('aiUndo').disabled=true;$('aiOut').hidden=false;$('aiOut').innerHTML='<h3>Last change undone.</h3>'};
+$('aiGo').onclick=async()=>{
+  const t=$('aiTxt').value.trim();if(!t&&!files.length)return;
+  const b=$('aiGo');b.disabled=true;b.textContent='Reading…';
+  try{
+    if(AIK())show(await askAI(t));
+    else if(files.length)throw new Error('Reading images, PDFs and video needs an API key. Add one under AI settings.');
+    else show(local(t));
+  }catch(e){$('aiOut').hidden=false;$('aiOut').innerHTML='<h3 style="color:var(--patho)">'+esc(e.message)+'</h3>'}
+  b.disabled=false;b.textContent='Read and propose changes';
+};
+})();
+</script>
+ </body>
+</html>
